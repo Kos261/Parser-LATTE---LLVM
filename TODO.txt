@@ -1,0 +1,12 @@
+KAŻDA FUNKCJA KOŃCZY SIĘ RETURNEM
+1. Zbadać każde wystąpienie funkcji, klasy, metod
+2. Sygnatura funkcji - nazwa, typ zwracany, typy argumentów funkcji
+3. Sprawdzenie body funkcji (typy w tym wywołań czy zgadzają się z sygnaturą)
+
+np. visit get_type(Add(e1,e2)):
+         t1 = get_type(e1)
+         t2 = get_type(e2)
+         match:
+           (int,int) => int
+           (str, str) => str
+           (str, int) => raise error
