@@ -1,6 +1,11 @@
 // Hello world
 
+void test(int a){
+  x = 1;
+}
+
+
 int main () {
   printString("hello world") ;
-  return 0 ;
+  return 0;
 }

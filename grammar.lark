@@ -59,10 +59,10 @@ while_stmt: "while" "(" expr ")" stmt
 
 expr_stmt: expr ";"
 
-type: "int"
-    | "string"
-    | "boolean"
-    | "void"
+type: "int"       -> int_type
+    | "string"    -> string_type
+    | "boolean"   -> boolean_type
+    | "void"      -> void_type
     | func_type
 
 func_type: type "(" [type_list] ")"
