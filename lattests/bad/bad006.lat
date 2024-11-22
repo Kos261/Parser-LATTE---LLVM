@@ -2,3 +2,4 @@ int main() {
         x = 14;
 	return 0 ;
 }
+// Nie ma int

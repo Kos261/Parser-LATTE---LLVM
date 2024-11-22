@@ -10,3 +10,7 @@ np. visit get_type(Add(e1,e2)):
            (int,int) => int
            (str, str) => str
            (str, int) => raise error
+
+
+Deklaracja danej zmiennej tylko raz w bloku int x; int x; źle
+                                            int x; {int x;} ok

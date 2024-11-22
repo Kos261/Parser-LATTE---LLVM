@@ -1,11 +1,11 @@
 // Hello world
 
-void test(int a){
-  x = 1;
+int test(boolean b){
+  return 0;
 }
 
 
 int main () {
-  printString("hello world") ;
+  int x=3;
   return 0;
 }

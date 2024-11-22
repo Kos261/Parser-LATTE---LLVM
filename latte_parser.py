@@ -1,7 +1,7 @@
 import os
 from lark import Lark, Transformer, v_args
 from TreeVisitorLLVM import TreeVisitorLLVM
-from SemanticVisitor import SygnatureAnalyzer, FunctionCallAnalyzer
+from SemanticVisitors import SygnatureAnalyzer, FunctionCallAnalyzer
 
 
 
@@ -50,19 +50,22 @@ if __name__ == "__main__":
         grammar = file.read()
 
 
-    try:
-        parser = Lark(grammar, parser='lalr', start='start')
-        code = load_ins('examples/Hello.lt')
-        tree = parser.parse(code)
-        print(tree.pretty())
-    except:
-        Exception("Unable to parse file. Something went wrong")
+    # try:
+    parser = Lark(grammar, parser='lalr', start='start')
+    code = load_ins('examples/Hello.lt')
+    tree = parser.parse(code)
+    print(tree.pretty())
+    # except:
+    #     Exception("Unable to parse file. Something went wrong")
     
     
     SIG_analyzer = SygnatureAnalyzer()   
 
     SIG_analyzer.visit(tree)
     SIG_analyzer.display_function_table()
-    SIG_analyzer.check_main()
+    # SIG_analyzer.check_main()
 
+
+    Call_analyzer = FunctionCallAnalyzer(SIG_analyzer.func_table)
+    Call_analyzer.visit(tree)
 
