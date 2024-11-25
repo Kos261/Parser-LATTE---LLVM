@@ -1,1 +1,3 @@
-int main() {int x = true;}
+int main() {
+    int x = true;   
+}

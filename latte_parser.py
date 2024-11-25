@@ -49,26 +49,17 @@ if __name__ == "__main__":
         grammar = file.read()
     parser = Lark(grammar, parser='lalr', start='start')
 
-    test_cases = []
-
-    try:
-        code = load_ins('examples/simpletests/test01.lat')
-        tree = parser.parse(code)   
-    except:
-        raise Exception("Unable to parse file. Something went wrong")
-    
+    code = load_ins('examples/simpletests/test03.lat')
+    tree = parser.parse(code)   
+    print(tree.pretty())    
 
     SIG_analyzer = SygnatureAnalyzer()   
-
     SIG_analyzer.visit(tree)
-    SIG_analyzer.display_function_table()
-    # SIG_analyzer.check_main()
+    SIG_analyzer.check_main()
+    # SIG_analyzer.display_function_table()
+    
 
     function_table = SIG_analyzer.function_table
-
-    # Call_analyzer = FunctionCallAnalyzer(SIG_analyzer.func_table)
-    # Call_analyzer.visit(tree)
-
 
     analyzer = SemanticAnalyzer(function_table)
     analyzer.visit(tree) 

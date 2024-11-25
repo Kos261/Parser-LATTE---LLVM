@@ -129,11 +129,17 @@ class BlockAnalyzer:
         else:
             raise Exception("Attempted to exit global scope")
 
-    def declare_variable(self, var_name, var_type):
+    def declare_variable(self, var_name, var_type, value_tree=None):
+        print("\nVar declared in Block analyser")
         current_scope = self.symbol_table_stack[-1]
-        
+
         if var_name in current_scope:
             raise Exception(f"Variable {var_name} already declared in this scope")
+        
+        if value_tree:
+            value_type = self.evaluate_expression(value_tree)
+            if value_type != var_type:
+                raise Exception(f"Type mismatch: Cannot assign {value_type} to {var_type}")
         
         current_scope[var_name] = var_type
         print(f"Declared variable {var_name} of type {var_type}")
@@ -145,6 +151,37 @@ class BlockAnalyzer:
                 return scope[var_name]
         raise Exception(f"Variable {var_name} not declared")
 
+
+    def evaluate_expression(self, tree):
+        if tree.data == 'int_expr':  # Liczby całkowite
+            return 'int'
+        
+        elif tree.data == 'boolean_expr':  # Wartości logiczne
+            return 'boolean'
+        
+        elif tree.data == 'string_expr':  # Ciągi znaków
+            return 'string'
+        
+        elif tree.data == 'variable':  # Zmienna
+            var_name = tree.children[0].value
+            return self.get_variable_type(var_name)
+        
+        elif tree.data == 'add' or tree.data == 'sub':
+            left_type = self.evaluate_expression(tree.children[0])
+            right_type = self.evaluate_expression(tree.children[1])
+            if left_type == 'int' and right_type == 'int':
+                return 'int'
+            raise Exception(f"Type mismatch in {tree.data}: Cannot use {left_type} and {right_type}")
+        
+        elif tree.data == 'and' or tree.data == 'or':
+            left_type = self.evaluate_expression(tree.children[0])
+            right_type = self.evaluate_expression(tree.children[1])
+            if left_type == 'boolean' and right_type == 'boolean':
+                return 'boolean'
+            raise Exception(f"Type mismatch in {tree.data}: Cannot use {left_type} and {right_type}")
+        
+        else:
+            raise Exception(f"Unsupported expression type: {tree.data}")
 
 
 class SemanticAnalyzer(Visitor):
@@ -158,9 +195,12 @@ class SemanticAnalyzer(Visitor):
         if tree.data == 'int_expr':  
             return 'int'
         
-        elif tree.data == 'bool_expr':  
-            return 'bool'
+        elif tree.data == 'boolean_expr':  
+            return 'boolean'
         
+        elif tree.data == 'true_expr' or tree.data == 'false_expr':  # Literalne wartości logiczne
+            return 'boolean'
+
         elif tree.data == 'string_expr':
             return 'string'
         
@@ -178,15 +218,15 @@ class SemanticAnalyzer(Visitor):
         elif tree.data == 'and' or tree.data == 'or':  # Operatory logiczne
             left_type = self.eval_expr(tree.children[0])
             right_type = self.eval_expr(tree.children[1])
-            if left_type == 'bool' and right_type == 'bool':
-                return 'bool'
+            if left_type == 'boolean' and right_type == 'boolean':
+                return 'boolean'
             raise Exception(f"Type error: Cannot perform {tree.data} on {left_type} and {right_type}")
         
         elif tree.data == 'compare':  # Porównania (np. x > y)
             left_type = self.eval_expr(tree.children[0])
             right_type = self.eval_expr(tree.children[1])
             if left_type == 'int' and right_type == 'int':
-                return 'bool'
+                return 'boolean'
             raise Exception(f"Type error: Cannot compare {left_type} and {right_type}")
         
         else:
@@ -221,10 +261,29 @@ class SemanticAnalyzer(Visitor):
         self.function_call_analyzer.func_call_expr(tree)
 
 
-    def var_decl(self, tree):
-        var_type = tree.children[0]
-        var_name = tree.children[1].value
-        self.block_analyzer.declare_variable(var_name, var_type)
+    def decl_stmt(self, tree):
+        # print("\nVar declaration in Semantic analyser")
+        # print(tree.pretty())  # Debugging: pełna struktura drzewa
+
+        var_type = tree.children[0].data  # Typ zmiennej (np. 'int_type')
+        items = tree.children[1].children  # Lista zmiennych (item_list)
+
+        for item in items:
+            var_name = item.children[0].value  # Nazwa zmiennej (IDENT)
+            expr = item.children[1]  # Wyrażenie przypisane do zmiennej (np. 'add_expr')
+
+            # print(f"Declaring variable {var_name} of type {var_type} with expression {expr}")
+
+            # Ewaluacja typu wyrażenia
+            expr_type = self.eval_expr(expr)
+            # print(f"Evaluated expression type: {expr_type}")
+
+            # Sprawdzenie zgodności typów
+            if expr_type != var_type.replace("_type", ""):
+                raise Exception(f"Type mismatch: Cannot assign {expr_type} to {var_type}")
+
+            # Deklaracja zmiennej w BlockAnalyzer
+            self.block_analyzer.declare_variable(var_name, var_type.replace("_type", ""))
 
     def variable(self, tree):
         var_name = tree.children[0].value
@@ -232,11 +291,17 @@ class SemanticAnalyzer(Visitor):
         # print(f"Zmienna {var_name} ma typ {var_type}")
 
     def var_decl_with_expr(self, tree):
+        # print("Var declaring with expression in Semantic analyser")
         var_type = tree.children[0]
         var_name = tree.children[1].value
         expr = tree.children[2]
+        # print(f"Declaring variable {var_name} of type {var_type} with expression {expr}")
+
 
         expr_type = self.eval_expr(expr)
+        # print(f"Evaluated expression type: {expr_type}")
+
+
         if expr_type != var_type:
             raise Exception(f"Wrong types: can't assign {expr_type} to {var_type}")
         
