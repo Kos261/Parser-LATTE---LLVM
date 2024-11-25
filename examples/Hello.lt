@@ -6,6 +6,10 @@ int test(boolean b){
 
 
 int main () {
-  int x=3;
+  int x= 3 + 2;
   return 0;
+  {
+    string x="dupa";
+  }
+  test(true);
 }

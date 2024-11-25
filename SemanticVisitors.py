@@ -4,7 +4,7 @@ from lark import Tree, Token
 class SygnatureAnalyzer(Visitor):
     def __init__(self):
         super().__init__()
-        self.func_table = {
+        self.function_table = {
             'printInt': {'return_type': 'void', 'params': [('int', Token('IDENT', 'a'))]},
             'printString': {'return_type': 'void', 'params': [('string', Token('IDENT', 'a'))]},
             'error': {'return_type': 'void', 'params': []},
@@ -35,31 +35,29 @@ class SygnatureAnalyzer(Visitor):
         param_types = [(param.children[0].data.replace("_type", ""), param.children[1]) for param in params]
 
         # Zapisanie sygnatury funkcji
-        if func_name in self.func_table:
+        if func_name in self.function_table:
             raise Exception(f"Function {func_name} is already defined")
 
-        self.func_table[func_name] = {
+        self.function_table[func_name] = {
             'return_type': return_type,
             'params': param_types
         }
 
     def check_main(self):
-        if 'main' not in self.func_table:
+        if 'main' not in self.function_table:
             raise Exception('Function "main" is missing')
         
-        if self.func_table['main']['return_type'] != 'int':
+        if self.function_table['main']['return_type'] != 'int':
             raise Exception('Function "main" should return integer')
         
-        if self.func_table['main']['params'] != []:
+        if self.function_table['main']['params'] != []:
             raise Exception("Function 'main' doesn't allow any arguments")
-        
-        print("Everything is good with main")
         
     def display_function_table(self):
         predef = ['printInt', 'printString', 'error', 'readInt', 'readString']
-        for func in self.func_table:
+        for func in self.function_table:
             if func not in predef:
-                print(f"\n{func} - {self.func_table[func]}")
+                print(f"\n{func} - {self.function_table[func]}")
 
 
 
@@ -68,16 +66,19 @@ class FunctionCallAnalyzer(Visitor):
         super().__init__()
         self.function_table = function_table
 
-
-
     def func_call_expr(self, tree):
-        
-        func_name = tree.children[0]
-        args = tree.children[1:][0].children
-        
+        # print("\n\n", tree)
+        # print(f"\tChildren of tree: {tree.children}")
 
-        print(f"\nCalling {func_name}")
-        print(f"Arguments: {args}")
+        func_name = tree.children[0]
+
+        if len(tree.children[1:]) >= 1:
+            args = tree.children[1:][0].children
+        else:
+            args = []
+
+        # print(f"\nCalling {func_name}")
+        # print(f"Arguments: {args}")
         # print(f"Number of args: {len(args)}")
 
         if func_name not in self.function_table:
@@ -117,24 +118,23 @@ class FunctionCallAnalyzer(Visitor):
 
 class BlockAnalyzer:
     def __init__(self):
-        self.symbol_table_stack = [{}]  # Stos tabel symboli (jedna tabela na zakres)
+        self.symbol_table_stack = [{}]
 
     def enter_block(self):
-        # Wchodzimy w nowy blok - nowa tabela symboli
         self.symbol_table_stack.append({})
 
     def exit_block(self):
-        # Wychodzimy z bloku - usuwamy ostatnią tabelę symboli
         if len(self.symbol_table_stack) > 1:
             self.symbol_table_stack.pop()
         else:
             raise Exception("Attempted to exit global scope")
 
     def declare_variable(self, var_name, var_type):
-        # Dodaj zmienną do bieżącego zakresu
         current_scope = self.symbol_table_stack[-1]
+        
         if var_name in current_scope:
             raise Exception(f"Variable {var_name} already declared in this scope")
+        
         current_scope[var_name] = var_type
         print(f"Declared variable {var_name} of type {var_type}")
 
@@ -144,6 +144,115 @@ class BlockAnalyzer:
             if var_name in scope:
                 return scope[var_name]
         raise Exception(f"Variable {var_name} not declared")
+
+
+
+class SemanticAnalyzer(Visitor):
+    def __init__(self, function_table):
+        self.function_table = function_table
+        self.block_analyzer = BlockAnalyzer()
+        self.function_call_analyzer = FunctionCallAnalyzer(self.function_table)
+
+
+    def eval_expr(self, tree):
+        if tree.data == 'int_expr':  
+            return 'int'
+        
+        elif tree.data == 'bool_expr':  
+            return 'bool'
+        
+        elif tree.data == 'string_expr':
+            return 'string'
+        
+        elif tree.data == 'variable':  # Zmienna
+            var_name = tree.children[0].value
+            return self.block_analyzer.get_variable_type(var_name)
+        
+        elif tree.data == 'add' or tree.data == 'sub':  # Operatory arytmetyczne
+            left_type = self.eval_expr(tree.children[0])
+            right_type = self.eval_expr(tree.children[1])
+            if left_type == 'int' and right_type == 'int':
+                return 'int'
+            raise Exception(f"Type error: Cannot perform {tree.data} on {left_type} and {right_type}")
+        
+        elif tree.data == 'and' or tree.data == 'or':  # Operatory logiczne
+            left_type = self.eval_expr(tree.children[0])
+            right_type = self.eval_expr(tree.children[1])
+            if left_type == 'bool' and right_type == 'bool':
+                return 'bool'
+            raise Exception(f"Type error: Cannot perform {tree.data} on {left_type} and {right_type}")
+        
+        elif tree.data == 'compare':  # Porównania (np. x > y)
+            left_type = self.eval_expr(tree.children[0])
+            right_type = self.eval_expr(tree.children[1])
+            if left_type == 'int' and right_type == 'int':
+                return 'bool'
+            raise Exception(f"Type error: Cannot compare {left_type} and {right_type}")
+        
+        else:
+            raise Exception(f"Unsupported expression type: {tree.data}")
+
+    def block(self, tree):
+        self.block_analyzer.enter_block()
+
+        for stmt in tree.children:
+            self.visit(stmt)
+        
+        self.block_analyzer.exit_block()
+
+    def func_decl(self, tree):
+        func_name = tree.children[0].value
+        return_type = tree.children[1].value
+        params = [(param.children.value, param.children[1].value) for param in tree.children[2:-1]]
+
+        if func_name in self.function_table:
+            raise Exception(f"Function {func_name} already declared")
+
+        self.function_table[func_name] = {'return_type': return_type, 'params': params}
+        # print(f"Declared function {func_name} with params {params}, return type {return_type}")
+
+        self.block_analyzer.enter_block()
+        for param_type, param_name in params:
+            self.block_analyzer.declare_variable(param_name, param_type)
+        self.visit(tree.children[-1])
+        self.block_analyzer.exit_block()
+
+    def func_call_expr(self, tree):
+        self.function_call_analyzer.func_call_expr(tree)
+
+
+    def var_decl(self, tree):
+        var_type = tree.children[0]
+        var_name = tree.children[1].value
+        self.block_analyzer.declare_variable(var_name, var_type)
+
+    def variable(self, tree):
+        var_name = tree.children[0].value
+        var_type = self.block_analyzer.get_variable_type(var_name)
+        # print(f"Zmienna {var_name} ma typ {var_type}")
+
+    def var_decl_with_expr(self, tree):
+        var_type = tree.children[0]
+        var_name = tree.children[1].value
+        expr = tree.children[2]
+
+        expr_type = self.eval_expr(expr)
+        if expr_type != var_type:
+            raise Exception(f"Wrong types: can't assign {expr_type} to {var_type}")
+        
+        self.block_analyzer.declare_variable(var_name, var_type)
+
+    def add_expr(self, tree):
+        left_var = tree.children[0]
+        left_type = self.eval_expr(left_var)
+
+        right_var = tree.children[2]
+        right_type = self.eval_expr(right_var)
+
+        if left_type != "int" or right_type != "int":
+            raise Exception("You can only add 'int'")
+    
+        return "int"
 
 
 
