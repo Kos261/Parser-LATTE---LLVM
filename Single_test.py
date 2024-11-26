@@ -49,7 +49,7 @@ if __name__ == "__main__":
         grammar = file.read()
     parser = Lark(grammar, parser='lalr', start='start')
 
-    code = load_ins('examples/simpletests/test03.lat')
+    code = load_ins('examples/simpletests/test05.lat')
     tree = parser.parse(code)   
     print(tree.pretty())    
 

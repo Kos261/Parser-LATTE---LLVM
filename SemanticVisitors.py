@@ -62,9 +62,10 @@ class SygnatureAnalyzer(Visitor):
 
 
 class FunctionCallAnalyzer(Visitor):
-    def __init__(self, function_table):
+    def __init__(self, function_table, block_analyzer):
         super().__init__()
         self.function_table = function_table
+        self.block_analyzer = block_analyzer
 
     def func_call_expr(self, tree):
         # print("\n\n", tree)
@@ -103,6 +104,7 @@ class FunctionCallAnalyzer(Visitor):
         return actual_type == expected_type
 
     def get_arg_type(self, arg):
+        print(arg)
         if isinstance(arg, Tree):
             if arg.data == 'int_expr':
                 return 'int'
@@ -112,6 +114,14 @@ class FunctionCallAnalyzer(Visitor):
                 return 'boolean'
             elif arg.data == 'false_expr':
                 return 'boolean'
+            elif arg.data == 'var_expr':
+                var_name = arg.children[0].value
+                try:
+                    print("\n\n\tZadeklarowane zmienne\n", self.block_analyzer.symbol_table_stack)
+                    return self.block_analyzer.get_variable_type(var_name)
+                except Exception:
+                    raise Exception(f"Variable {var_name} is not declared")
+
         raise Exception(f"Unknown type for argument: {arg}")
     
 
@@ -130,7 +140,7 @@ class BlockAnalyzer:
             raise Exception("Attempted to exit global scope")
 
     def declare_variable(self, var_name, var_type, value_tree=None):
-        print("\nVar declared in Block analyser")
+        # print("\nVar declared in Block analyser")
         current_scope = self.symbol_table_stack[-1]
 
         if var_name in current_scope:
@@ -142,7 +152,7 @@ class BlockAnalyzer:
                 raise Exception(f"Type mismatch: Cannot assign {value_type} to {var_type}")
         
         current_scope[var_name] = var_type
-        print(f"Declared variable {var_name} of type {var_type}")
+        # print(f"Declared variable {var_name} of type {var_type}")
 
     def get_variable_type(self, var_name):
         # Sprawdź typ zmiennej w bieżącym zakresie
@@ -184,11 +194,12 @@ class BlockAnalyzer:
             raise Exception(f"Unsupported expression type: {tree.data}")
 
 
+
 class SemanticAnalyzer(Visitor):
     def __init__(self, function_table):
         self.function_table = function_table
         self.block_analyzer = BlockAnalyzer()
-        self.function_call_analyzer = FunctionCallAnalyzer(self.function_table)
+        self.function_call_analyzer = FunctionCallAnalyzer(self.function_table, self.block_analyzer)
 
 
     def eval_expr(self, tree):
@@ -260,30 +271,46 @@ class SemanticAnalyzer(Visitor):
     def func_call_expr(self, tree):
         self.function_call_analyzer.func_call_expr(tree)
 
-
     def decl_stmt(self, tree):
-        # print("\nVar declaration in Semantic analyser")
-        # print(tree.pretty())  # Debugging: pełna struktura drzewa
+        
+        var_type = tree.children[0].data  
+        items = tree.children[1].children  
 
-        var_type = tree.children[0].data  # Typ zmiennej (np. 'int_type')
-        items = tree.children[1].children  # Lista zmiennych (item_list)
+        default_values = {
+            'int_type':Tree('int_expr', [Token('INTEGER', '0')]),
+            'boolean_type':Tree('false_expr', []),
+            'string_type':Tree('string_expr', [Token('STRING', '""')])
+        }
 
         for item in items:
-            var_name = item.children[0].value  # Nazwa zmiennej (IDENT)
-            expr = item.children[1]  # Wyrażenie przypisane do zmiennej (np. 'add_expr')
-
-            # print(f"Declaring variable {var_name} of type {var_type} with expression {expr}")
-
-            # Ewaluacja typu wyrażenia
+            var_name = item.children[0].value  
+            # int x; albo int x = 10;
+            if len(item.children) > 1:
+                expr = item.children[1] 
+            else:
+                expr = default_values[var_type]
+            
             expr_type = self.eval_expr(expr)
-            # print(f"Evaluated expression type: {expr_type}")
 
-            # Sprawdzenie zgodności typów
+            #Spr. zgodności typów
             if expr_type != var_type.replace("_type", ""):
-                raise Exception(f"Type mismatch: Cannot assign {expr_type} to {var_type}")
+                raise Exception(f"Can't assign {expr_type} to {var_type}")
 
-            # Deklaracja zmiennej w BlockAnalyzer
             self.block_analyzer.declare_variable(var_name, var_type.replace("_type", ""))
+
+    def assign_stmt(self, tree):
+        var_name = tree.children[0].value
+        expr = tree.children[1]
+
+        #Spr. czy zmienna była zadeklarowana
+        try:
+            var_type = self.block_analyzer.get_variable_type(var_name)
+        except Exception as e:
+            raise Exception(f"Variable {var_name} is not declared in current scope") from e
+
+        expr_type = self.eval_expr(expr)
+        if expr_type != var_type:
+            raise Exception(f"Can't assign {expr_type} to {var_type}")
 
     def variable(self, tree):
         var_name = tree.children[0].value
