@@ -16,10 +16,10 @@ if __name__ == "__main__":
         grammar = file.read()
     parser = Lark(grammar, parser='lalr', start='start')
 
-    code = load_ins('examples/simpletests/test05.lat')
+    code = load_ins('lattests/bad/bad004.lat')
     
     tree = parser.parse(code)   
-    # print(tree.pretty())    
+    print(tree.pretty())    
 
     try:
         SIG_analyzer = SygnatureAnalyzer()   

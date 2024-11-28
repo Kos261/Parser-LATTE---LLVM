@@ -27,10 +27,12 @@ class SygnatureAnalyzer(Visitor):
         # Ustalanie parametrów
         if isinstance(children[0], Tree) and children[0].data == 'arg_list':
             params = children[0].children
-            block = children[1]
         else:
-            params = []  # Funkcja bez parametrów
-            block = children[0]
+            params = [] 
+
+        if self.check_repeated_params(params):
+            raise Exception(f"Repeated parameters in function {func_name}")
+        
 
         param_types = [(param.children[0].data.replace("_type", ""), param.children[1]) for param in params]
 
@@ -42,6 +44,10 @@ class SygnatureAnalyzer(Visitor):
             'return_type': return_type,
             'params': param_types
         }
+
+    def check_repeated_params(self,params):
+        params_set = set(params)
+        return len(params) != len(params_set)
 
     def check_main(self):
         if 'main' not in self.function_table:

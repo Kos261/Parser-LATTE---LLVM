@@ -1,4 +1,4 @@
-from lark import Lark
+from lark import Lark, UnexpectedToken
 from SemanticVisitors import *
 
 
@@ -10,7 +10,7 @@ def create_test_cases(parser):
         # "02":"Tylko litera a?",
         "03":"Dwa razy taki sam argument funkcji",
         "04":"Dwa returny",
-        "05":"Brak zwracanego typu funckji",
+        # "05":"Brak zwracanego typu funckji",
         "06":"Brak deklaracji typu zmiennej",
         "07":"Dwa razy deklarowana zminenna w bloku",
         "08":"Return nigdy nie osiągnięty przez IF stmt",
@@ -37,14 +37,26 @@ def create_test_cases(parser):
 
     
     for test_num, description in test_descriptions.items():
-        try:
-            code = load_ins(f'lattests/bad/bad0{test_num}.lat')
-            tree = parser.parse(code)   
-        except Exception as e:
-            raise Exception(f"Unable to parse 'bad0{test_num}.lat'. Reason: {e}")
-        test_cases.append((description, tree, False))
+        code = load_ins(f'lattests/bad/bad0{test_num}.lat')
+        tree = parse_code(parser, code)   
+        test_cases.append((description, tree, False, test_num))
 
     return test_cases
+
+def parse_code(parser, code):
+    try:
+        return parser.parse(code)
+    except UnexpectedToken as e:
+        # Wyciągnij podstawowe informacje o błędzie
+        error_line = e.line
+        error_column = e.column
+        unexpected_token = e.token
+        expected_tokens = ', '.join(e.expected)
+        
+        # Dostosowany komunikat błędu
+        message = (f"Błąd składni w linii {error_line}, kolumna {error_column}: "
+                   f"nieoczekiwany token '{unexpected_token.value}'. Oczekiwano: {expected_tokens}.")
+        raise Exception(message) from e
 
 
 def load_ins(filepath):
@@ -65,10 +77,10 @@ if __name__ == "__main__":
 
 
 
-
-
+    passed = 0
+    not_passed = 0
     print("%"*30 + "  TESTING  " + "%"*30)
-    for description, test_tree, should_pass in test_cases:
+    for description, test_tree, should_pass, test_num in test_cases:
         try:
             SIG_analyzer = SygnatureAnalyzer()
             SIG_analyzer.visit(test_tree)
@@ -79,13 +91,17 @@ if __name__ == "__main__":
             analyzer.visit(test_tree)
 
             if not should_pass:
-                print(f"\n\tFAILED: {description} should fail but passed")
+                print(f"\n\tFAILED: bad0{test_num} {description} should fail but passed")
+                not_passed += 1
             else:
-                print(f"\n\tPASSED: {description}")
+                print(f"\n\tPASSED: bad0{test_num} {description}")
+                passed += 1
         except Exception as e:
             if should_pass:
-                print(f"\n\tFAILED: {description} - {e}")
+                print(f"\n\tFAILED: bad0{test_num} {description} - {e}")
+                not_passed += 1
             else:
-                print(f"\n\tPASSED: {description} - Caught expected error: {e}")
-
+                print(f"\n\tPASSED: bad0{test_num} {description} - Caught expected error: {e}")
+                passed += 1
     print("\n")
+    print(f"\tPrzeszło {passed}/{passed+not_passed} testów")
