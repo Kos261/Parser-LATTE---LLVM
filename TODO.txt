@@ -14,3 +14,8 @@ np. visit get_type(Add(e1,e2)):
 
 Deklaracja danej zmiennej tylko raz w bloku int x; int x; źle
                                             int x; {int x;} ok
+
+
+
+
+rozbić eval_expr na poszczególne i zrobić topdown

@@ -1,6 +1,4 @@
-import os
-from lark import Lark, Transformer, v_args
-from TreeVisitorLLVM import TreeVisitorLLVM
+from lark import Lark
 from SemanticVisitors import *
 
 
@@ -13,7 +11,7 @@ def create_test_cases(parser):
         tree = parser.parse(code)   
     except:
         raise Exception(f"Unable to parse 'test01.lat'.")
-    test_cases.append(("Duplikacja funkcji", tree, False))
+    test_cases.append(("Duplikacja funkcji (test01)", tree, False))
 
 
     try:
@@ -21,15 +19,15 @@ def create_test_cases(parser):
         tree = parser.parse(code)   
     except:
         raise Exception("Unable to parse 'test02.lat.")
-    test_cases.append(("Zła ilość parametrów", tree, False))
+    test_cases.append(("Zła ilość parametrów (test02)", tree, False))
 
 
-    # try:
-    code = load_ins('examples/simpletests/test03.lat')
-    tree = parser.parse(code)   
-    # except:
-        # raise Exception("Unable to parse 'test03.lat'.")
-    test_cases.append(("Złe przypisanie wartości", tree, False))
+    try:
+        code = load_ins('examples/simpletests/test03.lat')
+        tree = parser.parse(code)   
+    except:
+        raise Exception("Unable to parse 'test03.lat'.")
+    test_cases.append(("Złe przypisanie wartości (test03)", tree, False))
 
 
     try:
@@ -37,7 +35,7 @@ def create_test_cases(parser):
         tree = parser.parse(code)   
     except:
         raise Exception("Unable to parse 'test04.lat'.")
-    test_cases.append(("Niezadeklarowana zmienna", tree, False))
+    test_cases.append(("Niezadeklarowana zmienna (test04)", tree, False))
 
 
     try:
@@ -45,9 +43,18 @@ def create_test_cases(parser):
         tree = parser.parse(code)   
     except:
         raise Exception("Unable to parse 'test05.lat'.")
-    test_cases.append(("Poprawny program", tree, True))
+    test_cases.append(("Poprawny program (test05)", tree, True))
+
+
+    try:
+        code = load_ins('examples/simpletests/test06.lat')
+        tree = parser.parse(code)   
+    except:
+        raise Exception("Unable to parse 'test06.lat'.")
+    test_cases.append(("Poprawny program (test06)", tree, True))
 
     return test_cases
+
 
 def load_ins(filepath):
     program = ""
@@ -64,30 +71,33 @@ if __name__ == "__main__":
     parser = Lark(grammar, parser='lalr', start='start')
 
     test_cases = create_test_cases(parser)
-    # test_cases = [test_cases[2]]
-
-
-
+    # test_cases = [test_cases[2]]  # Możesz odkomentować do testowania konkretnego przypadku
 
     print("%"*30 + "  TESTING  " + "%"*30)
     for description, test_tree, should_pass in test_cases:
         try:
+            # Analiza sygnatur funkcji
             SIG_analyzer = SygnatureAnalyzer()
-            SIG_analyzer.visit(test_tree)
-            # SIG_analyzer.display_function_table()
-
+            SIG_analyzer.visit_topdown(test_tree)
             function_table = SIG_analyzer.function_table
-            analyzer = SemanticAnalyzer(function_table)
-            analyzer.visit(test_tree)
 
+            # Analiza semantyczna
+            analyzer = SemanticAnalyzer(function_table)
+            analyzer.block_analyzer.reset()
+            analyzer.visit_topdown(test_tree)
+
+            # Jeśli program powinien się nie powieść, ale nie rzucił wyjątku
             if not should_pass:
-                print(f"\n\tFAILED: {description} should fail but passed")
+                print(f"\n\tFAILED: {description} - should fail but passed")
             else:
-                print(f"\n\tPASSED: {description}")
+                # Program przeszedł poprawnie
+                print(f"\n\tPASSED: {description} - no errors")
         except Exception as e:
             if should_pass:
-                print(f"\n\tFAILED: {description} - {e}")
+                # Program powinien działać, ale rzucił wyjątek
+                print(f"\n\tFAILED: {description} - Unexpected error: {e}")
             else:
+                # Program powinien się nie powieść i rzucił wyjątek
                 print(f"\n\tPASSED: {description} - Caught expected error: {e}")
 
     print("\n")

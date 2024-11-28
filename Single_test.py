@@ -1,36 +1,7 @@
 import os
-from lark import Lark, Transformer, v_args
-from TreeVisitorLLVM import TreeVisitorLLVM
+from lark import Lark
 from SemanticVisitors import *
 
-
-class LLVM_Creator:
-    def __init__(self):
-        self.printf_decl = 'declare i32 @printf(i8*, ...)\n'
-        self.format_str = '@.fmt = constant [12 x i8] c"%s\\0A\\00"\n'
-
-        self.start_part = """
-define i32 @main() {
-entry:
-"""
-
-
-
-
-    def create_llvm(self, instructions, printable_registers, filename="TEST"):
-        base_filename = os.path.splitext(os.path.basename(filename))[0]
-        os.makedirs('foo/bar', exist_ok=True)
-
-        with open(f"foo/bar/{base_filename}.ll", mode='w') as file:
-            file.write(self.printf_decl)
-            file.write(self.format_str)
-            file.write(self.start_part)
-
-            for instruction in instructions:
-                file.write(f"  {instruction}\n")
-            
-            file.write("  ret i32 0\n")
-            file.write("}\n")
 
 def load_ins(filepath):
     program = ""
@@ -40,26 +11,24 @@ def load_ins(filepath):
 
 
 
-
-
-
-
 if __name__ == "__main__":
     with open('grammar.lark', 'r', encoding='utf-8') as file:
         grammar = file.read()
     parser = Lark(grammar, parser='lalr', start='start')
 
     code = load_ins('examples/simpletests/test05.lat')
-    tree = parser.parse(code)   
-    print(tree.pretty())    
-
-    SIG_analyzer = SygnatureAnalyzer()   
-    SIG_analyzer.visit(tree)
-    SIG_analyzer.check_main()
-    # SIG_analyzer.display_function_table()
     
+    tree = parser.parse(code)   
+    # print(tree.pretty())    
 
-    function_table = SIG_analyzer.function_table
+    try:
+        SIG_analyzer = SygnatureAnalyzer()   
+        SIG_analyzer.visit_topdown(tree)
+        SIG_analyzer.check_main()
+        function_table = SIG_analyzer.function_table
 
-    analyzer = SemanticAnalyzer(function_table)
-    analyzer.visit(tree) 
+        analyzer = SemanticAnalyzer(function_table)
+        analyzer.visit_topdown(tree) 
+        print("\n\n\tVar stack",analyzer.block_analyzer.symbol_table_stack)
+    except Exception as e:
+        print(e)

@@ -19,7 +19,7 @@ class SygnatureAnalyzer(Visitor):
         # string readString()
 
     def topdef(self, tree):
-        func_name = tree.children[1]  
+        func_name = tree.children[1].value 
         return_type_node = tree.children[0] 
         return_type = return_type_node.data.replace("_type", "")
         children = tree.children[2:]
@@ -60,7 +60,6 @@ class SygnatureAnalyzer(Visitor):
                 print(f"\n{func} - {self.function_table[func]}")
 
 
-
 class FunctionCallAnalyzer(Visitor):
     def __init__(self, function_table, block_analyzer):
         super().__init__()
@@ -68,19 +67,12 @@ class FunctionCallAnalyzer(Visitor):
         self.block_analyzer = block_analyzer
 
     def func_call_expr(self, tree):
-        # print("\n\n", tree)
-        # print(f"\tChildren of tree: {tree.children}")
-
         func_name = tree.children[0]
 
         if len(tree.children[1:]) >= 1:
             args = tree.children[1:][0].children
         else:
             args = []
-
-        # print(f"\nCalling {func_name}")
-        # print(f"Arguments: {args}")
-        # print(f"Number of args: {len(args)}")
 
         if func_name not in self.function_table:
             raise Exception(f"Undefined function: {func_name}")
@@ -89,8 +81,7 @@ class FunctionCallAnalyzer(Visitor):
         expected_params = func_signature['params']
 
         if len(args) != len(expected_params):
-            raise Exception(f"\nFunction {func_name} expects {len(expected_params)} number of arguments, got {len(args)}")
-        
+            raise Exception(f"{func_name}() expects {len(expected_params)} number of arguments, got {len(args)}")
         
         for i, (arg, (expected_type, _)) in enumerate(zip(args, expected_params)):
             if not self.check_type(arg, expected_type):
@@ -104,7 +95,6 @@ class FunctionCallAnalyzer(Visitor):
         return actual_type == expected_type
 
     def get_arg_type(self, arg):
-        print(arg)
         if isinstance(arg, Tree):
             if arg.data == 'int_expr':
                 return 'int'
@@ -117,14 +107,12 @@ class FunctionCallAnalyzer(Visitor):
             elif arg.data == 'var_expr':
                 var_name = arg.children[0].value
                 try:
-                    print("\n\n\tZadeklarowane zmienne\n", self.block_analyzer.symbol_table_stack)
                     return self.block_analyzer.get_variable_type(var_name)
                 except Exception:
                     raise Exception(f"Variable {var_name} is not declared")
 
         raise Exception(f"Unknown type for argument: {arg}")
     
-
 
 class BlockAnalyzer:
     def __init__(self):
@@ -140,59 +128,25 @@ class BlockAnalyzer:
             raise Exception("Attempted to exit global scope")
 
     def declare_variable(self, var_name, var_type, value_tree=None):
-        # print("\nVar declared in Block analyser")
         current_scope = self.symbol_table_stack[-1]
 
         if var_name in current_scope:
             raise Exception(f"Variable {var_name} already declared in this scope")
         
-        if value_tree:
-            value_type = self.evaluate_expression(value_tree)
-            if value_type != var_type:
-                raise Exception(f"Type mismatch: Cannot assign {value_type} to {var_type}")
-        
         current_scope[var_name] = var_type
-        # print(f"Declared variable {var_name} of type {var_type}")
+        # print(f"Declared variable '{var_name}' of type '{var_type}' in current scope.")
 
     def get_variable_type(self, var_name):
-        # Sprawdź typ zmiennej w bieżącym zakresie
-        for scope in reversed(self.symbol_table_stack):
-            if var_name in scope:
-                return scope[var_name]
-        raise Exception(f"Variable {var_name} not declared")
-
-
-    def evaluate_expression(self, tree):
-        if tree.data == 'int_expr':  # Liczby całkowite
-            return 'int'
+        try:
+            for scope in reversed(self.symbol_table_stack):
+                if var_name in scope:
+                    return scope[var_name]
+        except:
+            raise Exception(f"Variable '{var_name}' not declared")
         
-        elif tree.data == 'boolean_expr':  # Wartości logiczne
-            return 'boolean'
-        
-        elif tree.data == 'string_expr':  # Ciągi znaków
-            return 'string'
-        
-        elif tree.data == 'variable':  # Zmienna
-            var_name = tree.children[0].value
-            return self.get_variable_type(var_name)
-        
-        elif tree.data == 'add' or tree.data == 'sub':
-            left_type = self.evaluate_expression(tree.children[0])
-            right_type = self.evaluate_expression(tree.children[1])
-            if left_type == 'int' and right_type == 'int':
-                return 'int'
-            raise Exception(f"Type mismatch in {tree.data}: Cannot use {left_type} and {right_type}")
-        
-        elif tree.data == 'and' or tree.data == 'or':
-            left_type = self.evaluate_expression(tree.children[0])
-            right_type = self.evaluate_expression(tree.children[1])
-            if left_type == 'boolean' and right_type == 'boolean':
-                return 'boolean'
-            raise Exception(f"Type mismatch in {tree.data}: Cannot use {left_type} and {right_type}")
-        
-        else:
-            raise Exception(f"Unsupported expression type: {tree.data}")
-
+    def reset(self):
+        self.symbol_table_stack = [{}]
+    
 
 
 class SemanticAnalyzer(Visitor):
@@ -201,78 +155,167 @@ class SemanticAnalyzer(Visitor):
         self.block_analyzer = BlockAnalyzer()
         self.function_call_analyzer = FunctionCallAnalyzer(self.function_table, self.block_analyzer)
 
-
     def eval_expr(self, tree):
-        if tree.data == 'int_expr':  
-            return 'int'
-        
-        elif tree.data == 'boolean_expr':  
-            return 'boolean'
-        
-        elif tree.data == 'true_expr' or tree.data == 'false_expr':  # Literalne wartości logiczne
-            return 'boolean'
+        # Mapowanie typu drzewa na funkcje obsługujące
+        handlers = {
+            'int_expr': self.eval_int_expr,
+            'boolean_expr': self.eval_boolean_expr,
+            'true_expr': self.eval_boolean_literal,
+            'false_expr': self.eval_boolean_literal,
+            'string_expr': self.eval_string_expr,
+            'var_expr': self.eval_var_expr,
+            'add': self.eval_add_expr,
+            'sub': self.eval_sub_expr,
+            'and': self.eval_and_expr,
+            'or': self.eval_or_expr,
+            'rel_expr': self.eval_rel_expr,
+            'paren_expr': self.eval_paren_expr,
+            'func_call_expr': self.func_call_expr,
+        }
 
-        elif tree.data == 'string_expr':
-            return 'string'
-        
-        elif tree.data == 'variable':  # Zmienna
-            var_name = tree.children[0].value
-            return self.block_analyzer.get_variable_type(var_name)
-        
-        elif tree.data == 'add' or tree.data == 'sub':  # Operatory arytmetyczne
-            left_type = self.eval_expr(tree.children[0])
-            right_type = self.eval_expr(tree.children[1])
-            if left_type == 'int' and right_type == 'int':
-                return 'int'
-            raise Exception(f"Type error: Cannot perform {tree.data} on {left_type} and {right_type}")
-        
-        elif tree.data == 'and' or tree.data == 'or':  # Operatory logiczne
-            left_type = self.eval_expr(tree.children[0])
-            right_type = self.eval_expr(tree.children[1])
-            if left_type == 'boolean' and right_type == 'boolean':
-                return 'boolean'
-            raise Exception(f"Type error: Cannot perform {tree.data} on {left_type} and {right_type}")
-        
-        elif tree.data == 'compare':  # Porównania (np. x > y)
-            left_type = self.eval_expr(tree.children[0])
-            right_type = self.eval_expr(tree.children[1])
-            if left_type == 'int' and right_type == 'int':
-                return 'boolean'
-            raise Exception(f"Type error: Cannot compare {left_type} and {right_type}")
-        
+        if tree.data in handlers:
+            return handlers[tree.data](tree)
         else:
             raise Exception(f"Unsupported expression type: {tree.data}")
+        
+    def eval_int_expr(self, tree):
+        return 'int'
+
+    def eval_boolean_expr(self, tree):
+        return 'boolean'
+
+    def eval_boolean_literal(self, tree):
+        return 'boolean'
+
+    def eval_string_expr(self, tree):
+        return 'string'
+
+    def eval_var_expr(self, tree):
+        var_name = tree.children[0].value
+        return self.block_analyzer.get_variable_type(var_name)
+
+    def eval_add_expr(self, tree):
+        left_type = self.eval_expr(tree.children[0])
+        right_type = self.eval_expr(tree.children[1])
+        if left_type == 'int' and right_type == 'int':
+            return 'int'
+        raise Exception(f"Type error: Cannot add '{left_type}' and '{right_type}'")
+
+    def eval_sub_expr(self, tree):
+        left_type = self.eval_expr(tree.children[0])
+        right_type = self.eval_expr(tree.children[1])
+        if left_type == 'int' and right_type == 'int':
+            return 'int'
+        raise Exception(f"Type error: Cannot subtract '{left_type}' and '{right_type}'")
+
+    def eval_and_expr(self, tree):
+        left_type = self.eval_expr(tree.children[0])
+        right_type = self.eval_expr(tree.children[1])
+        if left_type == 'boolean' and right_type == 'boolean':
+            return 'boolean'
+        raise Exception(f"Type error: Cannot perform 'and' on '{left_type}' and '{right_type}'")
+
+    def eval_or_expr(self, tree):
+        left_type = self.eval_expr(tree.children[0])
+        right_type = self.eval_expr(tree.children[1])
+        if left_type == 'boolean' and right_type == 'boolean':
+            return 'boolean'
+        raise Exception(f"Type error: Cannot perform 'or' on '{left_type}' and '{right_type}'")
+
+    def eval_rel_expr(self, tree):
+        left_type = self.eval_expr(tree.children[0])  
+        operator = tree.children[1].data             # <, >, ==, !=
+        right_type = self.eval_expr(tree.children[2])  
+
+        # Sprawdzanie zgodności typów
+        if left_type != right_type:
+            raise Exception(f"Type error: Cannot compare '{left_type}' and '{right_type}' with '{operator}'")
+
+        # Typ wyniku relacyjnego zawsze jest 'boolean'
+        return 'boolean'
+
+    def eval_paren_expr(self, tree):
+        return self.eval_expr(tree.children[0])
 
     def block(self, tree):
         self.block_analyzer.enter_block()
 
         for stmt in tree.children:
-            self.visit(stmt)
+                self.visit_topdown(stmt)
         
         self.block_analyzer.exit_block()
 
-    def func_decl(self, tree):
-        func_name = tree.children[0].value
+    def eval_func_call_expr(self, tree):
+        #Zbiera nazwę, typ, parametry, sprawdza czy zadeklarowana
+        #Dodaje ją do tabeli funkcji? Nie wiem czemu a potem sprawdza ciało funkcji
+        func_name = tree.children[0].data
         return_type = tree.children[1].value
-        params = [(param.children.value, param.children[1].value) for param in tree.children[2:-1]]
+        params = [(param.children[0], param.children[1]) for param in tree.children[2:-1]]
 
         if func_name in self.function_table:
             raise Exception(f"Function {func_name} already declared")
 
         self.function_table[func_name] = {'return_type': return_type, 'params': params}
-        # print(f"Declared function {func_name} with params {params}, return type {return_type}")
 
         self.block_analyzer.enter_block()
+
         for param_type, param_name in params:
             self.block_analyzer.declare_variable(param_name, param_type)
-        self.visit(tree.children[-1])
+        self.visit_topdown(tree.children[-1])
+
         self.block_analyzer.exit_block()
 
     def func_call_expr(self, tree):
-        self.function_call_analyzer.func_call_expr(tree)
+        func_name = tree.children[0].value
+        args = tree.children[1].children if len(tree.children) > 1 else []
+
+        if func_name not in self.function_table:
+            raise Exception(f"Function '{func_name}' is not declared")
+
+        func_signature = self.function_table[func_name]
+        expected_params = func_signature['params']
+
+        if len(args) != len(expected_params):
+            raise Exception(f"Function '{func_name}' expects {len(expected_params)} arguments, but got {len(args)}")
+
+        for i, (arg, (expected_type, _)) in enumerate(zip(args, expected_params)):
+            arg_type = self.eval_expr(arg)  # Użycie eval_expr do sprawdzenia typu każdego argumentu
+            if arg_type != expected_type:
+                raise Exception(
+                    f"Argument {i+1} of function '{func_name}' has incorrect type: "
+                    f"expected '{expected_type}', got '{arg_type}'"
+                )
+
+        return func_signature['return_type']
+
+    def visit_function_body(self, tree):
+        self.block_analyzer.enter_block()
+
+        for stmt in tree.children:
+            self.visit(stmt)
+
+        self.block_analyzer.exit_block()
+
+    def func_decl(self, tree):
+        func_name = tree.children[1]  # Nazwa funkcji
+        if func_name not in self.function_table:
+            raise Exception(f"Function {func_name} not found in function_table")
+        
+        # Pobierz sygnaturę funkcji
+        func_signature = self.function_table[func_name]
+        params = func_signature['params']
+
+        # Wprowadź parametry do aktualnego zakresu
+        self.block_analyzer.enter_block()
+        for param_type, param_name in params:
+            self.block_analyzer.declare_variable(param_name.value, param_type)
+
+        # Analiza ciała funkcji
+        self.visit_function_body(tree.children[-1])
+
+        self.block_analyzer.exit_block()
 
     def decl_stmt(self, tree):
-        
         var_type = tree.children[0].data  
         items = tree.children[1].children  
 
@@ -293,6 +336,13 @@ class SemanticAnalyzer(Visitor):
             expr_type = self.eval_expr(expr)
 
             #Spr. zgodności typów
+            # print(tree.pretty())
+            # print("\n\tExpr", expr)
+            # print("\n\tExpr type", expr_type)
+            # for key, value in self.function_table.items():
+            #     print(key, value)
+
+            # print("\n\n")
             if expr_type != var_type.replace("_type", ""):
                 raise Exception(f"Can't assign {expr_type} to {var_type}")
 
@@ -315,38 +365,17 @@ class SemanticAnalyzer(Visitor):
     def variable(self, tree):
         var_name = tree.children[0].value
         var_type = self.block_analyzer.get_variable_type(var_name)
-        # print(f"Zmienna {var_name} ma typ {var_type}")
-
+     
     def var_decl_with_expr(self, tree):
-        # print("Var declaring with expression in Semantic analyser")
+        
         var_type = tree.children[0]
         var_name = tree.children[1].value
         expr = tree.children[2]
-        # print(f"Declaring variable {var_name} of type {var_type} with expression {expr}")
-
-
         expr_type = self.eval_expr(expr)
-        # print(f"Evaluated expression type: {expr_type}")
-
 
         if expr_type != var_type:
             raise Exception(f"Wrong types: can't assign {expr_type} to {var_type}")
         
         self.block_analyzer.declare_variable(var_name, var_type)
 
-    def add_expr(self, tree):
-        left_var = tree.children[0]
-        left_type = self.eval_expr(left_var)
 
-        right_var = tree.children[2]
-        right_type = self.eval_expr(right_var)
-
-        if left_type != "int" or right_type != "int":
-            raise Exception("You can only add 'int'")
-    
-        return "int"
-
-
-
-class ExpressionAnalyzer:
-    pass
