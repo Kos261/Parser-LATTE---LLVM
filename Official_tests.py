@@ -1,4 +1,4 @@
-from lark import Lark, UnexpectedToken
+from lark import Lark, UnexpectedInput, UnexpectedToken, UnexpectedCharacters
 from SemanticVisitors import *
 
 
@@ -61,16 +61,12 @@ def create_good_test_cases(parser):
 def parse_code(parser, code):
     try:
         return parser.parse(code)
-    except UnexpectedToken as e:
-        # Wyciągnij podstawowe informacje o błędzie
-        error_line = e.line
-        error_column = e.column
-        unexpected_token = e.token
-        expected_tokens = ', '.join(e.expected)
-        
-        # Dostosowany komunikat błędu
-        message = (f"Błąd składni w linii {error_line}, kolumna {error_column}: "
-                   f"nieoczekiwany token '{unexpected_token.value}'. Oczekiwano: {expected_tokens}.")
+    except (UnexpectedInput, UnexpectedToken, UnexpectedCharacters) as e:
+        # Wyciągnij informacje z wyjątku
+        line = e.line
+        column = e.column
+        unexpected = e.get_context(code)
+        message = f"Błąd składni w linii {line}, kolumna {column}: {unexpected.strip()}"
         raise Exception(message) from e
 
 

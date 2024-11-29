@@ -195,28 +195,32 @@ class SemanticAnalyzer(Visitor):
 
     def eval_add_expr(self, tree):
         left_type = self.eval_expr(tree.children[0])
-        right_type = self.eval_expr(tree.children[1])
+        operator = tree.children[1]  # plus_op
+        right_type = self.eval_expr(tree.children[2])
         if left_type == 'int' and right_type == 'int':
             return 'int'
         raise Exception(f"Type error: Cannot add '{left_type}' and '{right_type}'")
 
     def eval_sub_expr(self, tree):
         left_type = self.eval_expr(tree.children[0])
-        right_type = self.eval_expr(tree.children[1])
+        operator = tree.children[1]  # plus_op
+        right_type = self.eval_expr(tree.children[2])
         if left_type == 'int' and right_type == 'int':
             return 'int'
         raise Exception(f"Type error: Cannot subtract '{left_type}' and '{right_type}'")
 
     def eval_mul_expr(self,tree):
         left_type = self.eval_expr(tree.children[0])
-        right_type = self.eval_expr(tree.children[1])
+        operator = tree.children[1]  # plus_op
+        right_type = self.eval_expr(tree.children[2])
         if left_type == 'int' and right_type == 'int':
             return 'int'
         raise Exception(f"Type error: Cannot multiply '{left_type}' and '{right_type}'")
 
     def eval_div_expr(self,tree):
         left_type = self.eval_expr(tree.children[0])
-        right_type = self.eval_expr(tree.children[1])
+        operator = tree.children[1]  # plus_op
+        right_type = self.eval_expr(tree.children[2])
         if left_type == 'int' and right_type == 'int':
             return 'int'
         raise Exception(f"Type error: Cannot divide '{left_type}' and '{right_type}'")
@@ -342,7 +346,7 @@ class SemanticAnalyzer(Visitor):
     def topdef(self, tree):
         func_name = tree.children[1].value
         self.current_function = (func_name, False)
-
+        print("NAzwa funkcji: ",func_name)
         return_type = tree.children[0].data.replace("_type", "")
         block = tree.children[-1]
 
@@ -352,6 +356,8 @@ class SemanticAnalyzer(Visitor):
                 'params': []
             }
 
+        print("Kod osiągalny: ",self.code_reachable)
+        self.code_reachable = True
         self.block_analyzer.enter_block()
         self.visit(block)
         self.block_analyzer.exit_block()
@@ -367,6 +373,7 @@ class SemanticAnalyzer(Visitor):
         if self.current_function[0] is None:
             raise Exception("Return statement found outside of any function")
 
+        print("KOD RET_STMT NIEOSIĄGALNY",self.code_reachable)
         if not self.code_reachable:
             raise Exception("Unreachable code detected")
 
@@ -388,6 +395,7 @@ class SemanticAnalyzer(Visitor):
         self.code_reachable = False
 
     def stmt(self, tree):
+        print("STMT KOD NIEOSIĄGALNY", self.code_reachable)
         if not self.code_reachable:
             raise Exception("Unreachable code detected")
 

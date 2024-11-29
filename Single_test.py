@@ -1,5 +1,5 @@
 import os
-from lark import Lark
+from lark import Lark, UnexpectedInput, UnexpectedToken, UnexpectedCharacters
 from SemanticVisitors import *
 
 
@@ -9,6 +9,16 @@ def load_lat(filepath):
         program = f.read()
     return program
 
+def parse_code(parser, code):
+    try:
+        return parser.parse(code)
+    except (UnexpectedInput, UnexpectedToken, UnexpectedCharacters) as e:
+        # Wyciągnij informacje z wyjątku
+        line = e.line
+        column = e.column
+        unexpected = e.get_context(code)
+        message = f"Błąd składni w linii {line}, kolumna {column}: {unexpected.strip()}"
+        raise Exception(message) from e
 
 
 if __name__ == "__main__":
@@ -18,7 +28,7 @@ if __name__ == "__main__":
 
     # code = load_lat('lattests/good/core001.lat')
     code = load_lat('examples/simpletests/test07.lat')
-    tree = parser.parse(code)   
+    tree = parse_code(parser, code)   
     print(tree.pretty())    
 
     try:
