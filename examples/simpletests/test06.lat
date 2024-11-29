@@ -1,3 +1,4 @@
 int main(){
     boolean x = (1 == 0);
+    return 0;
 }

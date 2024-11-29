@@ -2,7 +2,7 @@ from lark import Lark, UnexpectedToken
 from SemanticVisitors import *
 
 
-def create_test_cases(parser):
+def create_bad_test_cases(parser):
     test_cases = []
 
     test_descriptions = {
@@ -43,6 +43,21 @@ def create_test_cases(parser):
 
     return test_cases
 
+
+def create_good_test_cases(parser):
+    test_cases = []
+
+    test_nums = ['01','02','03','04','05','06','07','08','09','10','11','12','13','14','15','16','17','18','19','20','21','22','23','24','25','26','27','28','31','32','33','34','35']
+
+
+    
+    for test_num in test_nums:
+        code = load_ins(f'lattests/good/core0{test_num}.lat')
+        tree = parse_code(parser, code)   
+        test_cases.append((tree, True, test_num))
+
+    return test_cases
+
 def parse_code(parser, code):
     try:
         return parser.parse(code)
@@ -73,13 +88,11 @@ if __name__ == "__main__":
         grammar = file.read()
     parser = Lark(grammar, parser='lalr', start='start')
 
-    test_cases = create_test_cases(parser)
-
-
+    test_cases = create_bad_test_cases(parser)
 
     passed = 0
     not_passed = 0
-    print("%"*30 + "  TESTING  " + "%"*30)
+    print("%"*30 + "  TESTING BAD " + "%"*30)
     for description, test_tree, should_pass, test_num in test_cases:
         try:
             SIG_analyzer = SygnatureAnalyzer()
@@ -88,7 +101,7 @@ if __name__ == "__main__":
 
             function_table = SIG_analyzer.function_table
             analyzer = SemanticAnalyzer(function_table)
-            analyzer.visit(test_tree)
+            analyzer.visit_topdown(test_tree)
 
             if not should_pass:
                 print(f"\n\tFAILED: bad0{test_num} {description} should fail but passed")
@@ -97,6 +110,7 @@ if __name__ == "__main__":
                 print(f"\n\tPASSED: bad0{test_num} {description}")
                 passed += 1
         except Exception as e:
+            
             if should_pass:
                 print(f"\n\tFAILED: bad0{test_num} {description} - {e}")
                 not_passed += 1
@@ -105,3 +119,42 @@ if __name__ == "__main__":
                 passed += 1
     print("\n")
     print(f"\tPrzeszło {passed}/{passed+not_passed} testów")
+
+
+
+
+
+
+
+
+    # test_cases = create_good_test_cases(parser)
+
+    # passed = 0
+    # not_passed = 0
+    # print("%"*30 + "  TESTING GOOD " + "%"*30)
+    # for test_tree, should_pass, test_num in test_cases:
+    #     try:
+    #         SIG_analyzer = SygnatureAnalyzer()
+    #         SIG_analyzer.visit(test_tree)
+    #         # SIG_analyzer.display_function_table()
+
+    #         function_table = SIG_analyzer.function_table
+    #         analyzer = SemanticAnalyzer(function_table)
+    #         analyzer.visit_topdown(test_tree)
+
+    #         if not should_pass:
+    #             print(f"\n\tFAILED: core0{test_num} should fail but passed")
+    #             not_passed += 1
+    #         else:
+    #             print(f"\n\tPASSED: core0{test_num}")
+    #             passed += 1
+    #     except Exception as e:
+            
+    #         if should_pass:
+    #             print(f"\n\tFAILED: core0{test_num} - {e}")
+    #             not_passed += 1
+    #         else:
+    #             print(f"\n\tPASSED: bad0{test_num} - Caught expected error: {e}")
+    #             passed += 1
+    # print("\n")
+    # print(f"\tPrzeszło {passed}/{passed+not_passed} testów")

@@ -3,7 +3,7 @@ from lark import Lark
 from SemanticVisitors import *
 
 
-def load_ins(filepath):
+def load_lat(filepath):
     program = ""
     with open(filepath, mode='r') as f:
         program = f.read()
@@ -16,8 +16,8 @@ if __name__ == "__main__":
         grammar = file.read()
     parser = Lark(grammar, parser='lalr', start='start')
 
-    code = load_ins('lattests/bad/bad004.lat')
-    
+    # code = load_lat('lattests/good/core001.lat')
+    code = load_lat('examples/simpletests/test07.lat')
     tree = parser.parse(code)   
     print(tree.pretty())    
 
@@ -29,6 +29,5 @@ if __name__ == "__main__":
 
         analyzer = SemanticAnalyzer(function_table)
         analyzer.visit_topdown(tree) 
-        print("\n\n\tVar stack",analyzer.block_analyzer.symbol_table_stack)
     except Exception as e:
         print(e)

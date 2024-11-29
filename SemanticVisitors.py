@@ -12,12 +12,6 @@ class SygnatureAnalyzer(Visitor):
             'readString': {'return_type': 'string', 'params': []}
         }
 
-        # void printInt(int)
-        # void printString(string)
-        # void error()
-        # int readInt()
-        # string readString()
-
     def topdef(self, tree):
         func_name = tree.children[1].value 
         return_type_node = tree.children[0] 
@@ -93,9 +87,6 @@ class FunctionCallAnalyzer(Visitor):
             if not self.check_type(arg, expected_type):
                 raise Exception(f"\nArgument {i+1} of {func_name} has incorrect type")
             
-        
-
-
     def check_type(self, arg, expected_type):
         actual_type = self.get_arg_type(arg)
         return actual_type == expected_type
@@ -154,15 +145,15 @@ class BlockAnalyzer:
         self.symbol_table_stack = [{}]
     
 
-
 class SemanticAnalyzer(Visitor):
     def __init__(self, function_table):
         self.function_table = function_table
         self.block_analyzer = BlockAnalyzer()
         self.function_call_analyzer = FunctionCallAnalyzer(self.function_table, self.block_analyzer)
+        self.current_function = (None, False)
+        self.code_reachable = True
 
     def eval_expr(self, tree):
-        # Mapowanie typu drzewa na funkcje obsługujące
         handlers = {
             'int_expr': self.eval_int_expr,
             'boolean_expr': self.eval_boolean_expr,
@@ -170,9 +161,11 @@ class SemanticAnalyzer(Visitor):
             'false_expr': self.eval_boolean_literal,
             'string_expr': self.eval_string_expr,
             'var_expr': self.eval_var_expr,
-            'add': self.eval_add_expr,
-            'sub': self.eval_sub_expr,
+            'add_expr': self.eval_add_expr,
+            'sub_expr': self.eval_sub_expr,
             'and': self.eval_and_expr,
+            'mul_expr': self.eval_mul_expr,
+            'div_expr': self.eval_div_expr,
             'or': self.eval_or_expr,
             'rel_expr': self.eval_rel_expr,
             'paren_expr': self.eval_paren_expr,
@@ -214,6 +207,20 @@ class SemanticAnalyzer(Visitor):
             return 'int'
         raise Exception(f"Type error: Cannot subtract '{left_type}' and '{right_type}'")
 
+    def eval_mul_expr(self,tree):
+        left_type = self.eval_expr(tree.children[0])
+        right_type = self.eval_expr(tree.children[1])
+        if left_type == 'int' and right_type == 'int':
+            return 'int'
+        raise Exception(f"Type error: Cannot multiply '{left_type}' and '{right_type}'")
+
+    def eval_div_expr(self,tree):
+        left_type = self.eval_expr(tree.children[0])
+        right_type = self.eval_expr(tree.children[1])
+        if left_type == 'int' and right_type == 'int':
+            return 'int'
+        raise Exception(f"Type error: Cannot divide '{left_type}' and '{right_type}'")
+
     def eval_and_expr(self, tree):
         left_type = self.eval_expr(tree.children[0])
         right_type = self.eval_expr(tree.children[1])
@@ -233,11 +240,9 @@ class SemanticAnalyzer(Visitor):
         operator = tree.children[1].data             # <, >, ==, !=
         right_type = self.eval_expr(tree.children[2])  
 
-        # Sprawdzanie zgodności typów
         if left_type != right_type:
             raise Exception(f"Type error: Cannot compare '{left_type}' and '{right_type}' with '{operator}'")
 
-        # Typ wyniku relacyjnego zawsze jest 'boolean'
         return 'boolean'
 
     def eval_paren_expr(self, tree):
@@ -245,31 +250,17 @@ class SemanticAnalyzer(Visitor):
 
     def block(self, tree):
         self.block_analyzer.enter_block()
+        previous_reachable = self.code_reachable  
 
         for stmt in tree.children:
-                self.visit_topdown(stmt)
-        
-        self.block_analyzer.exit_block()
-
-    def eval_func_call_expr(self, tree):
-        #Zbiera nazwę, typ, parametry, sprawdza czy zadeklarowana
-        #Dodaje ją do tabeli funkcji? Nie wiem czemu a potem sprawdza ciało funkcji
-        func_name = tree.children[0].data
-        return_type = tree.children[1].value
-        params = [(param.children[0], param.children[1]) for param in tree.children[2:-1]]
-
-        if func_name in self.function_table:
-            raise Exception(f"Function {func_name} already declared")
-
-        self.function_table[func_name] = {'return_type': return_type, 'params': params}
-
-        self.block_analyzer.enter_block()
-
-        for param_type, param_name in params:
-            self.block_analyzer.declare_variable(param_name, param_type)
-        self.visit_topdown(tree.children[-1])
+            if not self.code_reachable:
+                raise Exception("Unreachable code after return statement")
+            self.visit(stmt)
+            if self.check_returns(stmt):
+                self.code_reachable = False
 
         self.block_analyzer.exit_block()
+        self.code_reachable = previous_reachable
 
     def func_call_expr(self, tree):
         func_name = tree.children[0].value
@@ -285,7 +276,7 @@ class SemanticAnalyzer(Visitor):
             raise Exception(f"Function '{func_name}' expects {len(expected_params)} arguments, but got {len(args)}")
 
         for i, (arg, (expected_type, _)) in enumerate(zip(args, expected_params)):
-            arg_type = self.eval_expr(arg)  # Użycie eval_expr do sprawdzenia typu każdego argumentu
+            arg_type = self.eval_expr(arg)
             if arg_type != expected_type:
                 raise Exception(
                     f"Argument {i+1} of function '{func_name}' has incorrect type: "
@@ -294,41 +285,14 @@ class SemanticAnalyzer(Visitor):
 
         return func_signature['return_type']
 
-    def visit_function_body(self, tree):
-        self.block_analyzer.enter_block()
-
-        for stmt in tree.children:
-            self.visit(stmt)
-
-        self.block_analyzer.exit_block()
-
-    def func_decl(self, tree):
-        func_name = tree.children[1]  # Nazwa funkcji
-        if func_name not in self.function_table:
-            raise Exception(f"Function {func_name} not found in function_table")
-        
-        # Pobierz sygnaturę funkcji
-        func_signature = self.function_table[func_name]
-        params = func_signature['params']
-
-        # Wprowadź parametry do aktualnego zakresu
-        self.block_analyzer.enter_block()
-        for param_type, param_name in params:
-            self.block_analyzer.declare_variable(param_name.value, param_type)
-
-        # Analiza ciała funkcji
-        self.visit_function_body(tree.children[-1])
-
-        self.block_analyzer.exit_block()
-
     def decl_stmt(self, tree):
         var_type = tree.children[0].data  
         items = tree.children[1].children  
 
         default_values = {
-            'int_type':Tree('int_expr', [Token('INTEGER', '0')]),
-            'boolean_type':Tree('false_expr', []),
-            'string_type':Tree('string_expr', [Token('STRING', '""')])
+            'int_type': Tree('int_expr', [Token('INTEGER', '0')]),
+            'boolean_type': Tree('false_expr', []),
+            'string_type': Tree('string_expr', [Token('STRING', '""')])
         }
 
         for item in items:
@@ -341,14 +305,6 @@ class SemanticAnalyzer(Visitor):
             
             expr_type = self.eval_expr(expr)
 
-            #Spr. zgodności typów
-            # print(tree.pretty())
-            # print("\n\tExpr", expr)
-            # print("\n\tExpr type", expr_type)
-            # for key, value in self.function_table.items():
-            #     print(key, value)
-
-            # print("\n\n")
             if expr_type != var_type.replace("_type", ""):
                 raise Exception(f"Can't assign {expr_type} to {var_type}")
 
@@ -373,7 +329,6 @@ class SemanticAnalyzer(Visitor):
         var_type = self.block_analyzer.get_variable_type(var_name)
      
     def var_decl_with_expr(self, tree):
-        
         var_type = tree.children[0]
         var_name = tree.children[1].value
         expr = tree.children[2]
@@ -384,4 +339,105 @@ class SemanticAnalyzer(Visitor):
         
         self.block_analyzer.declare_variable(var_name, var_type)
 
+    def topdef(self, tree):
+        func_name = tree.children[1].value
+        self.current_function = (func_name, False)
 
+        return_type = tree.children[0].data.replace("_type", "")
+        block = tree.children[-1]
+
+        if func_name not in self.function_table:
+            self.function_table[func_name] = {
+                'return_type': return_type,
+                'params': []
+            }
+
+        self.block_analyzer.enter_block()
+        self.visit(block)
+        self.block_analyzer.exit_block()
+
+        # Spr. if branches
+        if return_type != "void":
+            if not self.check_returns(block):
+                raise Exception(f"Function '{func_name}' may not return a value of type '{return_type}' on all paths")
+
+        self.current_function = (None, False)
+
+    def ret_stmt(self, tree):
+        if self.current_function[0] is None:
+            raise Exception("Return statement found outside of any function")
+
+        if not self.code_reachable:
+            raise Exception("Unreachable code detected")
+
+        if len(tree.children) > 0:
+            return_expr = tree.children[0]
+            return_type = self.eval_expr(return_expr)
+        else:
+            return_type = 'void'
+
+        current_function = self.current_function[0]
+        expected_type = self.function_table[current_function]['return_type']
+
+        if return_type != expected_type:
+            raise Exception(
+                f"Return type mismatch in function '{current_function}': "
+                f"expected '{expected_type}', got '{return_type}'"
+            )
+        
+        self.code_reachable = False
+
+    def stmt(self, tree):
+        if not self.code_reachable:
+            raise Exception("Unreachable code detected")
+
+        self.visit_topdown(tree.children[0])
+
+    def if_stmt(self, tree):
+        condition = tree.children[0]
+        then_block = tree.children[1]
+
+        self.eval_expr(condition)
+
+        previous_reachable = self.code_reachable
+
+        self.visit(then_block)
+        then_reachable = self.code_reachable
+
+        self.code_reachable = previous_reachable
+
+        if len(tree.children) == 3:
+            else_block = tree.children[2]
+            self.visit(else_block)
+            else_reachable = self.code_reachable
+            self.code_reachable = then_reachable or else_reachable
+        else:
+            self.code_reachable = then_reachable or previous_reachable
+
+    def check_returns(self, tree):
+        if isinstance(tree, Tree):
+            if tree.data == 'block':
+                for stmt in tree.children:
+                    if self.check_returns(stmt):
+                        return True
+                return False
+            elif tree.data == 'stmt':
+                return self.check_returns(tree.children[0])
+            elif tree.data == 'ret_stmt':
+                return True
+            elif tree.data == 'if_stmt':
+                if len(tree.children) == 2:
+                    # if bez else – może nie zwrócić
+                    return False
+                elif len(tree.children) == 3:
+                    # if z else – obie gałęzie muszą zwracać
+                    then_returns = self.check_returns(tree.children[1])
+                    else_returns = self.check_returns(tree.children[2])
+                    return then_returns and else_returns
+            else:
+                for child in tree.children:
+                    if self.check_returns(child):
+                        return True
+                return False
+        else:
+            return False
