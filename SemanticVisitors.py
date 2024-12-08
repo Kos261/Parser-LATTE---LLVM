@@ -18,7 +18,6 @@ class SygnatureAnalyzer(Visitor):
         return_type = return_type_node.data.replace("_type", "")
         children = tree.children[2:]
 
-        # Ustalanie parametrów
         if isinstance(children[0], Tree) and children[0].data == 'arg_list':
             params = children[0].children
         else:
@@ -30,7 +29,6 @@ class SygnatureAnalyzer(Visitor):
 
         param_types = [(param.children[0].data.replace("_type", ""), param.children[1]) for param in params]
 
-        # Zapisanie sygnatury funkcji
         if func_name in self.function_table:
             raise Exception(f"Function {func_name} is already defined")
 
@@ -195,7 +193,7 @@ class SemanticAnalyzer(Visitor):
 
     def eval_add_expr(self, tree):
         left_type = self.eval_expr(tree.children[0])
-        operator = tree.children[1]  # plus_op
+        operator = tree.children[1]
         right_type = self.eval_expr(tree.children[2])
         if left_type == 'int' and right_type == 'int':
             return 'int'
@@ -203,7 +201,7 @@ class SemanticAnalyzer(Visitor):
 
     def eval_sub_expr(self, tree):
         left_type = self.eval_expr(tree.children[0])
-        operator = tree.children[1]  # plus_op
+        operator = tree.children[1]
         right_type = self.eval_expr(tree.children[2])
         if left_type == 'int' and right_type == 'int':
             return 'int'
@@ -211,7 +209,7 @@ class SemanticAnalyzer(Visitor):
 
     def eval_mul_expr(self,tree):
         left_type = self.eval_expr(tree.children[0])
-        operator = tree.children[1]  # plus_op
+        operator = tree.children[1]
         right_type = self.eval_expr(tree.children[2])
         if left_type == 'int' and right_type == 'int':
             return 'int'
@@ -219,7 +217,7 @@ class SemanticAnalyzer(Visitor):
 
     def eval_div_expr(self,tree):
         left_type = self.eval_expr(tree.children[0])
-        operator = tree.children[1]  # plus_op
+        operator = tree.children[1]
         right_type = self.eval_expr(tree.children[2])
         if left_type == 'int' and right_type == 'int':
             return 'int'
@@ -245,7 +243,7 @@ class SemanticAnalyzer(Visitor):
         right_type = self.eval_expr(tree.children[2])  
 
         if left_type != right_type:
-            raise Exception(f"Type error: Cannot compare '{left_type}' and '{right_type}' with '{operator}'")
+            raise Exception(f"Type error: Cannot compare '{left_type}' and '{right_type}'")
 
         return 'boolean'
 
@@ -253,18 +251,14 @@ class SemanticAnalyzer(Visitor):
         return self.eval_expr(tree.children[0])
 
     def block(self, tree):
-        self.block_analyzer.enter_block()
-        previous_reachable = self.code_reachable  
+        self.block_analyzer.enter_block() 
 
         for stmt in tree.children:
             if not self.code_reachable:
                 raise Exception("Unreachable code after return statement")
             self.visit(stmt)
-            if self.check_returns(stmt):
-                self.code_reachable = False
 
         self.block_analyzer.exit_block()
-        self.code_reachable = previous_reachable
 
     def func_call_expr(self, tree):
         func_name = tree.children[0].value
@@ -310,6 +304,7 @@ class SemanticAnalyzer(Visitor):
             expr_type = self.eval_expr(expr)
 
             if expr_type != var_type.replace("_type", ""):
+                
                 raise Exception(f"Can't assign {expr_type} to {var_type}")
 
             self.block_analyzer.declare_variable(var_name, var_type.replace("_type", ""))
@@ -319,10 +314,9 @@ class SemanticAnalyzer(Visitor):
         expr = tree.children[1]
 
         #Spr. czy zmienna była zadeklarowana
-        try:
-            var_type = self.block_analyzer.get_variable_type(var_name)
-        except Exception as e:
-            raise Exception(f"Variable {var_name} is not declared in current scope") from e
+        var_type = self.block_analyzer.get_variable_type(var_name)
+        if var_type == None:
+            raise Exception(f"Variable {var_name} is not declared in current scope")
 
         expr_type = self.eval_expr(expr)
         if expr_type != var_type:
@@ -346,7 +340,6 @@ class SemanticAnalyzer(Visitor):
     def topdef(self, tree):
         func_name = tree.children[1].value
         self.current_function = (func_name, False)
-        print("NAzwa funkcji: ",func_name)
         return_type = tree.children[0].data.replace("_type", "")
         block = tree.children[-1]
 
@@ -356,7 +349,6 @@ class SemanticAnalyzer(Visitor):
                 'params': []
             }
 
-        print("Kod osiągalny: ",self.code_reachable)
         self.code_reachable = True
         self.block_analyzer.enter_block()
         self.visit(block)
@@ -373,7 +365,6 @@ class SemanticAnalyzer(Visitor):
         if self.current_function[0] is None:
             raise Exception("Return statement found outside of any function")
 
-        print("KOD RET_STMT NIEOSIĄGALNY",self.code_reachable)
         if not self.code_reachable:
             raise Exception("Unreachable code detected")
 
@@ -394,13 +385,6 @@ class SemanticAnalyzer(Visitor):
         
         self.code_reachable = False
 
-    def stmt(self, tree):
-        print("STMT KOD NIEOSIĄGALNY", self.code_reachable)
-        if not self.code_reachable:
-            raise Exception("Unreachable code detected")
-
-        self.visit_topdown(tree.children[0])
-
     def if_stmt(self, tree):
         condition = tree.children[0]
         then_block = tree.children[1]
@@ -418,9 +402,24 @@ class SemanticAnalyzer(Visitor):
             else_block = tree.children[2]
             self.visit(else_block)
             else_reachable = self.code_reachable
+
+            # Kod po 'if-else' jest osiągalny, jeśli którykolwiek z bloków jest osiągalny
             self.code_reachable = then_reachable or else_reachable
         else:
-            self.code_reachable = then_reachable or previous_reachable
+            # Jeśli nie ma 'else', kod po 'if' jest osiągalny
+            self.code_reachable = previous_reachable or then_reachable
+
+    def while_stmt(self, tree):
+        condition = tree.children[0]
+        body = tree.children[1]
+
+        condition_type = self.eval_expr(condition)
+        if condition_type != 'boolean':
+            raise Exception("Warunek w pętli 'while' musi być typu 'boolean'")
+
+        previous_reachable = self.code_reachable
+        self.visit(body)
+        self.code_reachable = previous_reachable
 
     def check_returns(self, tree):
         if isinstance(tree, Tree):
