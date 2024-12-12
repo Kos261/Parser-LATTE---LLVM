@@ -50,8 +50,8 @@ def create_good_test_cases(parser):
     
     for test_num in test_nums:
         code = load_ins(f'lattests/good/core0{test_num}.lat')
-        tree = parse_code(parser, code)   
-        test_cases.append((tree, True, test_num))
+        tree, error_msg = parse_code(parser, code)   
+        test_cases.append((tree, error_msg, True, test_num))
 
     return test_cases
 
@@ -125,37 +125,44 @@ if __name__ == "__main__":
 
 
 
+    if 'passed' not in locals() or 'not_passed' not in locals():
+        passed = 0
+        not_passed = 0
+
+    test_cases = create_good_test_cases(parser)
+
+    print("%"*30 + "  TESTING GOOD " + "%"*30)
+    
+    for test_tree, error_msg, should_pass, test_num in test_cases:
+        if test_tree is None and should_pass:  # Jeśli nie udało się sparsować kodu
+            print(f"\n\tFAILED: core0{test_num} - {error_msg}")
+            not_passed += 1
+            continue
 
 
-    # test_cases = create_good_test_cases(parser)
+        try:
+            SIG_analyzer = SygnatureAnalyzer()
+            SIG_analyzer.visit(test_tree)
+            # SIG_analyzer.display_function_table()
 
-    # passed = 0
-    # not_passed = 0
-    # print("%"*30 + "  TESTING GOOD " + "%"*30)
-    # for test_tree, should_pass, test_num in test_cases:
-    #     try:
-    #         SIG_analyzer = SygnatureAnalyzer()
-    #         SIG_analyzer.visit(test_tree)
-    #         # SIG_analyzer.display_function_table()
+            function_table = SIG_analyzer.function_table
+            analyzer = SemanticAnalyzer(function_table)
+            analyzer.visit_topdown(test_tree)
 
-    #         function_table = SIG_analyzer.function_table
-    #         analyzer = SemanticAnalyzer(function_table)
-    #         analyzer.visit_topdown(test_tree)
-
-    #         if not should_pass:
-    #             print(f"\n\tFAILED: core0{test_num} should fail but passed")
-    #             not_passed += 1
-    #         else:
-    #             print(f"\n\tPASSED: core0{test_num}")
-    #             passed += 1
-    #     except Exception as e:
+            if not should_pass:
+                print(f"\n\tFAILED: core0{test_num} should fail but passed")
+                not_passed += 1
+            else:
+                print(f"\n\tPASSED: core0{test_num}")
+                passed += 1
+        except Exception as e:
             
-    #         if should_pass:
-    #             print(f"\n\tFAILED: core0{test_num} - {e}")
-    #             not_passed += 1
-    #         else:
-    #             print(f"\n\tPASSED: bad0{test_num} - Caught expected error: {e}")
-    #             passed += 1
+            if should_pass:
+                print(f"\n\tFAILED: core0{test_num} - {e}")
+                not_passed += 1
+            else:
+                print(f"\n\tPASSED: bad0{test_num} - Caught expected error: {e}")
+                passed += 1
     
     
     print("\n")
