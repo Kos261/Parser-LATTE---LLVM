@@ -1,5 +1,5 @@
 int main() {
-    string r;
+        string r ; // just to test blocks 
 	{
 	  int n = 10;
 	  int r = 1;
@@ -7,6 +7,22 @@ int main() {
 	    r = r * n;
 	    n--;
 	  }
+	  printInt(r);
 	}
-    return 0 ;
+	printString ("hello */");
+        printString ("/* world") ;
+        return 0 ;
+}
+
+int fac(int a) {
+	int r;
+	int n;
+
+	r = 1;
+	n = a;
+	while (n > 0) {
+	  r = r * n;
+	  n = n - 1;
+	}
+	return r;
 }

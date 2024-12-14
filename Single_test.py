@@ -19,7 +19,8 @@ if __name__ == "__main__":
 
 
     filename = 'examples/simpletests/test08.lat'
-    # filename = 'lattests/good/core001.lat'
+    filename = 'lattests/good/core021.lat'
+
     code = load_lat(filename)
     print(20*"%",f" Testing {filename} ",20*"%")
 
@@ -28,15 +29,17 @@ if __name__ == "__main__":
     if tree is None:
         print(f"\n\t{error_msg}")
     else:
-        # try:
+        try:
             # print(tree.pretty()) 
             SIG_analyzer = SygnatureAnalyzer()   
             SIG_analyzer.visit(tree)
             SIG_analyzer.check_main()
+            # SIG_analyzer.display_function_table()
             function_table = SIG_analyzer.function_table
+            
 
             analyzer = SemanticAnalyzer(function_table)
             analyzer.visit(tree) 
-        # except Exception as e:
-        #     print(e)
-        #     traceback.pri
+            print("\n\nWszystko działa")
+        except Exception as e:
+            print(e)

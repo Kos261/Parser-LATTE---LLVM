@@ -27,7 +27,7 @@ class SygnatureAnalyzer(Visitor):
             raise Exception(f"Repeated parameters in function {func_name}")
         
 
-        param_types = [(param.children[0].data.replace("_type", ""), param.children[1]) for param in params]
+        param_types = [(param.children[0].data.replace("_type", ""), param.children[1].value) for param in params]
 
         if func_name in self.function_table:
             raise Exception(f"Function {func_name} is already defined")
@@ -115,12 +115,10 @@ class BlockAnalyzer:
 
     def enter_block(self):
         self.symbol_table_stack.append({})
-        print(f"Entering new block. Current stack: {self.symbol_table_stack}")
 
     def exit_block(self):
         if len(self.symbol_table_stack) > 1:
             self.symbol_table_stack.pop()
-            print(f"Exiting block. Current stack: {self.symbol_table_stack}")
         else:
             raise Exception("Attempted to exit global scope")
 
@@ -131,7 +129,6 @@ class BlockAnalyzer:
             raise Exception(f"Variable {var_name} already declared in this scope")
         
         current_scope[var_name] = var_type
-        print(f"Declared variable '{var_name}' of type '{var_type}' in current scope.")
 
     def get_variable_type(self, var_name):
         try:
@@ -153,11 +150,22 @@ class SemanticAnalyzer(Visitor):
         self.current_function = (None, False)
         self.code_reachable = True
 
+    def which_col_row(self, tree):
+        first_token = next((child for child in tree.children if isinstance(child, Token)), None)
+        if first_token:
+            row = first_token.line
+            col = first_token.column
+        else:
+            row = col = None
+        return row, col
+
     def visit(self, tree):
         handlers = {
             'topdef': self.topdef,
             'ret_stmt': self.ret_stmt,
+            'vret_stmt': self.vret_stmt,
             'if_stmt': self.if_stmt,
+            'if_else_stmt': self.if_else_stmt,
             'while_stmt': self.while_stmt,
             'variable':self.variable,
             'decl_stmt':self.decl_stmt,
@@ -172,14 +180,17 @@ class SemanticAnalyzer(Visitor):
             'var_expr': self.eval_expr,
             'add_expr': self.eval_expr,
             'sub_expr': self.eval_expr,
-            'and': self.eval_expr,
+            'and_expr': self.eval_expr,
+            'or_expr': self.eval_expr,
+            'not_expr': self.eval_expr,
             'mul_expr': self.eval_expr,
             'div_expr': self.eval_expr,
-            'or': self.eval_expr,
             'rel_expr': self.eval_expr,
             'paren_expr': self.eval_expr,
             'func_call_expr': self.eval_expr,
             'decr_stmt': self.decr_stmt,
+            'incr_stmt': self.incr_stmt,
+            'neg_expr': self.eval_expr,
         }
 
 
@@ -197,9 +208,7 @@ class SemanticAnalyzer(Visitor):
                     self.visit(child)
 
         else:
-            # print(tree)
             raise Exception(f"Unhandled node type: {tree.data}")
-
 
     def eval_expr(self, tree):
         handlers = {
@@ -211,13 +220,15 @@ class SemanticAnalyzer(Visitor):
             'var_expr': self.eval_var_expr,
             'add_expr': self.eval_add_expr,
             'sub_expr': self.eval_sub_expr,
-            'and': self.eval_and_expr,
+            'and_expr': self.eval_and_expr,
+            'or_expr': self.eval_or_expr,
+            'not_expr': self.eval_not_expr,
             'mul_expr': self.eval_mul_expr,
             'div_expr': self.eval_div_expr,
-            'or': self.eval_or_expr,
             'rel_expr': self.eval_rel_expr,
             'paren_expr': self.eval_paren_expr,
             'func_call_expr': self.func_call_expr,
+            'neg_expr': self.neg_expr,
         }
 
         if tree.data in handlers:
@@ -247,6 +258,8 @@ class SemanticAnalyzer(Visitor):
         right_type = self.eval_expr(tree.children[2])
         if left_type == 'int' and right_type == 'int':
             return 'int'
+        if left_type == 'string' and right_type == 'string':
+            return 'string'
         raise Exception(f"Type error: Cannot add '{left_type}' and '{right_type}'")
 
     def eval_sub_expr(self, tree):
@@ -286,6 +299,14 @@ class SemanticAnalyzer(Visitor):
         if left_type == 'boolean' and right_type == 'boolean':
             return 'boolean'
         raise Exception(f"Type error: Cannot perform 'or' on '{left_type}' and '{right_type}'")
+
+    def eval_not_expr(self, tree):
+        expr = tree.children[0]
+        expr_type = self.eval_expr(expr)
+        if expr_type != 'boolean':
+            raise Exception(f"Cannot apply '!' ('not') to type '{expr_type}'")
+        
+        return 'boolean'
 
     def eval_rel_expr(self, tree):
         left_type = self.eval_expr(tree.children[0])  
@@ -328,13 +349,13 @@ class SemanticAnalyzer(Visitor):
 
         for stmt in tree.children:  
             if not self.code_reachable:
-                raise Exception("Unreachable code detected after a return statement")
+                raise Exception(f"Unreachable code detected after a return statement")
             self.visit(stmt) 
 
         self.block_analyzer.exit_block()
 
     def decl_stmt(self, tree):
-        # print(tree.pretty())
+        row, col = self.which_col_row(tree)
         var_type = tree.children[0].data  
         items = tree.children[1].children  
 
@@ -346,10 +367,6 @@ class SemanticAnalyzer(Visitor):
 
         for item in items:
             var_name = item.children[0].value  
-            print("\nVAR NAME",var_name)
-
-
-
             # int x; albo int x = 10;
             if len(item.children) > 1:
                 expr = item.children[1] 
@@ -360,11 +377,12 @@ class SemanticAnalyzer(Visitor):
 
             if expr_type != var_type.replace("_type", ""):
                 
-                raise Exception(f"Can't assign {expr_type} to {var_type}")
+                raise Exception(f"Can't assign {expr_type} to {var_type} at line {row} column {col}")
 
             self.block_analyzer.declare_variable(var_name, var_type.replace("_type", ""))
 
     def assign_stmt(self, tree):
+        row , col = self.which_col_row(tree)
         var_name = tree.children[0].value
         expr = tree.children[1]
 
@@ -374,7 +392,7 @@ class SemanticAnalyzer(Visitor):
 
         expr_type = self.eval_expr(expr)
         if expr_type != var_type:
-            raise Exception(f"Can't assign {expr_type} to {var_type}")
+            raise Exception(f"Can't assign {expr_type} to {var_type} at line {row} column {col}")
 
     def variable(self, tree):
         var_name = tree.children[0].value
@@ -388,7 +406,23 @@ class SemanticAnalyzer(Visitor):
 
         if var_type != 'int':
             raise Exception(f"Cannot decrement variable '{var_name}' of type '{var_type}'")
-        # print(f"Decrementing variable '{var_name}' by 1")
+
+    def incr_stmt(self, tree):
+        var_name = tree.children[0].value
+        var_type = self.block_analyzer.get_variable_type(var_name)
+        if var_type is None:
+            raise Exception(f"Variable '{var_name}' is not declared")
+
+        if var_type != 'int':
+            raise Exception(f"Cannot increment variable '{var_name}' of type '{var_type}'")
+
+    def neg_expr(self, tree):
+        expr = tree.children[0]
+        expr_type = self.eval_expr(expr)
+        if expr_type != 'int':
+            raise Exception(f"Cannot apply negation to type '{expr_type}'")
+        
+        return 'int'
 
     def var_decl_with_expr(self, tree):
         var_type = tree.children[0]
@@ -404,32 +438,37 @@ class SemanticAnalyzer(Visitor):
     def topdef(self, tree):
         func_name = tree.children[1].value
         self.current_function = (func_name, False)
-        # print("Current function: ", self.current_function)
         return_type = tree.children[0].data.replace("_type", "")
         block = tree.children[-1]
-        # print(f"Function block: {block}")
 
+        # Pobierz parametry funkcji z tabeli funkcji
+        params = self.function_table[func_name]['params']
         if func_name not in self.function_table:
             self.function_table[func_name] = {
                 'return_type': return_type,
-                'params': []
+                'params': params
             }
 
         self.code_reachable = True
+
         self.block_analyzer.enter_block()
-        self.visit(block)  # Use visit instead of visit_topdown
+
+        for param_type, param_name in params:
+            self.block_analyzer.declare_variable(param_name, param_type)
+
+        self.visit(block)
+
+        # Wyjdź z bloku funkcji
         self.block_analyzer.exit_block()
 
+        # Sprawdź, czy funkcja zawsze zwraca wartość, jeśli nie jest typu void
         if return_type != "void" and not self.check_returns(block):
             raise Exception(f"Function '{func_name}' may not return a value of type '{return_type}' on all paths")
 
+        # Zresetuj aktualną funkcję
         self.current_function = (None, False)
-        # print("Exited function")
 
     def ret_stmt(self, tree):
-        # print(f"Visiting return statement: {tree}")
-        # print(f"Current function context: {self.current_function}")
-
         if self.current_function[0] is None:
             raise Exception("Return statement found outside of any function")
 
@@ -439,7 +478,7 @@ class SemanticAnalyzer(Visitor):
         if len(tree.children) > 0:  # Return with a value
             return_expr = tree.children[0]
             return_type = self.eval_expr(return_expr)
-        else:  # Return without a value
+        else:
             return_type = 'void'
 
         current_function = self.current_function[0]
@@ -452,7 +491,9 @@ class SemanticAnalyzer(Visitor):
             )
 
         self.code_reachable = False  # Code after a return statement is unreachable
-        # print("Processed return statement")
+
+    def vret_stmt(self, tree):
+        self.ret_stmt(tree)
 
     def if_stmt(self, tree):
         condition = tree.children[0]
@@ -477,6 +518,30 @@ class SemanticAnalyzer(Visitor):
         else:
             # Jeśli nie ma 'else', kod po 'if' jest osiągalny
             self.code_reachable = previous_reachable or then_reachable
+
+    def if_else_stmt(self, tree):
+        condition = tree.children[0]  # Warunek (rel_expr)
+        then_block = tree.children[1]  # Blok 'then'
+        else_block = tree.children[2]  # Blok 'else'
+
+        # Ewaluacja warunku
+        self.eval_expr(condition)
+
+        previous_reachable = self.code_reachable
+
+        # Przetwarzanie bloku 'then'
+        self.visit(then_block)
+        then_reachable = self.code_reachable
+
+        # Przywróć poprzednią wartość 'code_reachable' dla bloku 'else'
+        self.code_reachable = previous_reachable
+
+        # Przetwarzanie bloku 'else'
+        self.visit(else_block)
+        else_reachable = self.code_reachable
+
+        # Po 'if-else' kod jest osiągalny, jeśli którykolwiek z bloków jest osiągalny
+        self.code_reachable = then_reachable or else_reachable
 
     def while_stmt(self, tree):
         condition = tree.children[0]

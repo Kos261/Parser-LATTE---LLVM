@@ -29,7 +29,7 @@ int fac(int a) {
 	  r = r * n;
 	  n = n - 1;
 	}
-	return r;
+	return r;          //TU JEST PROBLEM
 }
 
 int rfac(int n) {

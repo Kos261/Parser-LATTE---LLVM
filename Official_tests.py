@@ -104,7 +104,7 @@ if __name__ == "__main__":
             SIG_analyzer.visit(test_tree)
             function_table = SIG_analyzer.function_table
             analyzer = SemanticAnalyzer(function_table)
-            analyzer.visit_topdown(test_tree)
+            analyzer.visit(test_tree)
             if not should_pass:
                 print(f"\n\tFAILED: bad0{test_num} {description} should fail but passed")
                 not_passed += 1
@@ -147,7 +147,7 @@ if __name__ == "__main__":
 
             function_table = SIG_analyzer.function_table
             analyzer = SemanticAnalyzer(function_table)
-            analyzer.visit_topdown(test_tree)
+            analyzer.visit(test_tree)
 
             if not should_pass:
                 print(f"\n\tFAILED: core0{test_num} should fail but passed")
