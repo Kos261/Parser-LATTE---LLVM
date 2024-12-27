@@ -1,21 +1,32 @@
-KAŻDA FUNKCJA KOŃCZY SIĘ RETURNEM
-1. Zbadać każde wystąpienie funkcji, klasy, metod
-2. Sygnatura funkcji - nazwa, typ zwracany, typy argumentów funkcji
-3. Sprawdzenie body funkcji (typy w tym wywołań czy zgadzają się z sygnaturą)
-
-np. visit get_type(Add(e1,e2)):
-         t1 = get_type(e1)
-         t2 = get_type(e2)
-         match:
-           (int,int) => int
-           (str, str) => str
-           (str, int) => raise error
-
-
-Deklaracja danej zmiennej tylko raz w bloku int x; int x; źle
-                                            int x; {int x;} ok
+1. Kod czwórkowy
 
 
 
+2. Postać SSA i phi
 
-rozbić eval_expr na poszczególne i zrobić topdown
+
+
+3. Zakres zmiennych
+
+Przykład:
+W takiej pętli powinny być same zera, czyli należy pamiętać o zakresie x
+
+while (i<10){
+    int x;
+    print(x);
+    x++;
+    i++;
+}
+
+
+
+4. Konkatenacja stringów
+
+Predefiniowane funkcje osobno w C np. printInt printStr albo Concat
+Takie coś w pliku z funkcjami pomocniczymi predefined.cpp: 
+    void printInt(int n) { printf("%d\n", n);}
+
+Concat(s1, s2) = s1+s2
+
+
+

@@ -1,14 +1,16 @@
 /* usage of variable initialized in both branches. */
 
+int func(int a, int b, int c){
+  int result = a+b+c;
+}
+
 int main () {
   int x;
   int y = 56;
-  if (y + 45 <= 2) {
-    x = 1;
-  } else {
-    x = 2;
-  }
-  printInt(x);
+
+  int result = x + y;
+
+
   return 0 ;
 
 }

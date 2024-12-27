@@ -582,3 +582,11 @@ class SemanticAnalyzer(Visitor):
                 return False
         else:
             return False
+
+
+class LatteCompiler:
+    def __init__(self):
+        pass
+
+    def compile_program(self):
+        pass

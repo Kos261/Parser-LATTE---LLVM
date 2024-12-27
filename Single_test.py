@@ -1,8 +1,9 @@
-import os
-import sys
-from lark import Lark, UnexpectedInput, UnexpectedToken, UnexpectedCharacters
-from SemanticVisitors import *
+from lark import Lark
+from src.LLVM_frontend import *
 from Official_tests import parse_code
+
+
+
 
 def load_lat(filepath):
     program = ""
@@ -17,10 +18,7 @@ if __name__ == "__main__":
         grammar = file.read()
     parser = Lark(grammar, parser='lalr', start='start')
 
-
-    filename = 'examples/simpletests/test08.lat'
     filename = 'lattests/good/core021.lat'
-
     code = load_lat(filename)
     print(20*"%",f" Testing {filename} ",20*"%")
 
@@ -40,6 +38,6 @@ if __name__ == "__main__":
 
             analyzer = SemanticAnalyzer(function_table)
             analyzer.visit(tree) 
-            print("\n\nWszystko działa")
+            print("\n\nEverything works fine :)")
         except Exception as e:
             print(e)

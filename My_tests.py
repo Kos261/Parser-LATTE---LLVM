@@ -1,5 +1,5 @@
 from lark import Lark
-from SemanticVisitors import *
+from src.LLVM_frontend import *
 
 
 def create_test_cases(parser):
@@ -7,7 +7,7 @@ def create_test_cases(parser):
 
 
     try:
-        code = load_ins('examples/simpletests/test01.lat')
+        code = load_ins('examples/test01.lat')
         tree = parser.parse(code)   
     except:
         raise Exception(f"Unable to parse 'test01.lat'.")
@@ -15,7 +15,7 @@ def create_test_cases(parser):
 
 
     try:
-        code = load_ins('examples/simpletests/test02.lat')
+        code = load_ins('examples/test02.lat')
         tree = parser.parse(code)   
     except:
         raise Exception("Unable to parse 'test02.lat.")
@@ -23,7 +23,7 @@ def create_test_cases(parser):
 
 
     try:
-        code = load_ins('examples/simpletests/test03.lat')
+        code = load_ins('examples/test03.lat')
         tree = parser.parse(code)   
     except:
         raise Exception("Unable to parse 'test03.lat'.")
@@ -31,7 +31,7 @@ def create_test_cases(parser):
 
 
     try:
-        code = load_ins('examples/simpletests/test04.lat')
+        code = load_ins('examples/test04.lat')
         tree = parser.parse(code)   
     except:
         raise Exception("Unable to parse 'test04.lat'.")
@@ -39,7 +39,7 @@ def create_test_cases(parser):
 
 
     try:
-        code = load_ins('examples/simpletests/test05.lat')
+        code = load_ins('examples/test05.lat')
         tree = parser.parse(code)   
     except:
         raise Exception("Unable to parse 'test05.lat'.")
@@ -47,7 +47,7 @@ def create_test_cases(parser):
 
 
     try:
-        code = load_ins('examples/simpletests/test06.lat')
+        code = load_ins('examples/test06.lat')
         tree = parser.parse(code)   
     except:
         raise Exception("Unable to parse 'test06.lat'.")
@@ -76,28 +76,22 @@ if __name__ == "__main__":
     print("%"*30 + "  TESTING  " + "%"*30)
     for description, test_tree, should_pass in test_cases:
         try:
-            # Analiza sygnatur funkcji
             SIG_analyzer = SygnatureAnalyzer()
             SIG_analyzer.visit_topdown(test_tree)
             function_table = SIG_analyzer.function_table
 
-            # Analiza semantyczna
             analyzer = SemanticAnalyzer(function_table)
             analyzer.block_analyzer.reset()
             analyzer.visit_topdown(test_tree)
 
-            # Jeśli program powinien się nie powieść, ale nie rzucił wyjątku
             if not should_pass:
                 print(f"\n\tFAILED: {description} - should fail but passed")
             else:
-                # Program przeszedł poprawnie
                 print(f"\n\tPASSED: {description} - no errors")
         except Exception as e:
             if should_pass:
-                # Program powinien działać, ale rzucił wyjątek
                 print(f"\n\tFAILED: {description} - Unexpected error: {e}")
             else:
-                # Program powinien się nie powieść i rzucił wyjątek
                 print(f"\n\tPASSED: {description} - Caught expected error: {e}")
 
     print("\n")

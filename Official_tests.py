@@ -1,5 +1,5 @@
 from lark import Lark, UnexpectedInput, UnexpectedToken, UnexpectedCharacters
-from SemanticVisitors import *
+from src.LLVM_frontend import *
 
 
 def create_bad_test_cases(parser):
@@ -78,8 +78,9 @@ def load_ins(filepath):
 
 
 if __name__ == "__main__":
-    with open('grammar.lark', 'r', encoding='utf-8') as file:
+    with open('lattests/grammar.lark', 'r', encoding='utf-8') as file:
         grammar = file.read()
+        
     parser = Lark(grammar, parser='lalr', start='start')
 
     test_cases = create_bad_test_cases(parser)
