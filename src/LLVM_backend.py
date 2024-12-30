@@ -1,6 +1,5 @@
 from lark.visitors import Visitor
 from lark import Tree, Token
-import os
 from src.IRdataclasses import *
 from src.LLVM_frontend import BlockAnalyzer, FunctionCallAnalyzer
 
@@ -10,8 +9,13 @@ from src.LLVM_frontend import BlockAnalyzer, FunctionCallAnalyzer
 class LLVM_Creator(Visitor):
     def __init__(self, function_table):
         self.instructions = []
+        self.quadruples = []
+
+
         self.variable_index = {}
-        self.counter = 0
+        self.temp_counter = 0
+        self.label_counter = 0
+        self.register_counter = 0
         self.last_register = None
 
         self.function_table = function_table
@@ -19,6 +23,13 @@ class LLVM_Creator(Visitor):
         self.function_call_analyzer = FunctionCallAnalyzer(self.function_table, self.block_analyzer)
         self.current_function = (None, False)
 
+    def new_temp(self) -> str:
+        self.temp_counter += 1
+        return f"t{self.temp_counter}"
+
+    def new_label(self):
+        self.label_counter += 1
+        return f"L{self.label_counter}"
 
     def visit(self, tree):
         handlers = {
@@ -79,17 +90,20 @@ class LLVM_Creator(Visitor):
             'false_expr': self.eval_boolean_literal,
             'string_expr': self.eval_string_expr,
             'var_expr': self.eval_var_expr,
-            'add_expr': self.eval_add_expr,
-            'sub_expr': self.eval_sub_expr,
-            'and_expr': self.eval_and_expr,
-            'or_expr': self.eval_or_expr,
-            'not_expr': self.eval_not_expr,
-            'mul_expr': self.eval_mul_expr,
-            'div_expr': self.eval_div_expr,
+
+            'add_expr': self.Binary_expr,
+            'sub_expr': self.Binary_expr,
+            'mul_expr': self.Binary_expr,
+            'div_expr': self.Binary_expr,
+
+            'and_expr':self.Logical_expr,
+            'or_expr': self.Logical_expr,
+            'not_expr':self.Logical_expr,
+            'neg_expr':self.Logical_expr,
+
             'rel_expr': self.eval_rel_expr,
             'paren_expr': self.eval_paren_expr,
             'func_call_expr': self.func_call_expr,
-            'neg_expr': self.neg_expr,
         }
 
         if tree.data in handlers:
@@ -98,13 +112,22 @@ class LLVM_Creator(Visitor):
             raise Exception(f"Unsupported expression type: {tree.data}")
         
     def eval_int_expr(self, tree):
-        return 'int'
+        value = tree.children[0].value
+        return value
 
-    def eval_boolean_expr(self, tree):
-        return 'boolean'
+    def eval_boolean_expr(self, tree): # To nie jest w ogóle teraz używane?
+        value = tree.children[0].value
+        return value
 
     def eval_boolean_literal(self, tree):
-        return 'boolean'
+        print(f"Processing boolean literal: {tree.data}")
+        if tree.data == 'true_expr':
+            return 'true'
+        elif tree.data == 'false_expr':
+            return 'false'
+        else:
+            raise Exception(f"Nieznany węzeł logiczny: {tree.data}")
+
 
     def eval_string_expr(self, tree):
         return 'string'
@@ -114,44 +137,73 @@ class LLVM_Creator(Visitor):
         return self.block_analyzer.get_variable_type(var_name)
 
     def eval_add_expr(self, tree):
-        left_type = self.eval_expr(tree.children[0])
-        operator = tree.children[1]
-        right_type = self.eval_expr(tree.children[2])
+        return self.Binary_expr(tree)
 
-        if left_type == 'int' and right_type == 'int':
-            return 'int'
-        if left_type == 'string' and right_type == 'string':
-            return 'string'
+    def Binary_expr(self, tree):
+        print(tree.pretty())
+        left_tree = tree.children[0]
+        operator = tree.children[1].data
+        right_tree = tree.children[2]
 
-    def eval_sub_expr(self, tree):
-        left_type = self.eval_expr(tree.children[0])
-        operator = tree.children[1]
-        right_type = self.eval_expr(tree.children[2])
+        left_result = self.eval_expr(left_tree)
+        right_result = self.eval_expr(right_tree)
+        result = self.new_temp()
 
-        if left_type == 'int' and right_type == 'int':
-            return 'int'
+        self.quadruples.append(BinaryOperation(
+            operator=operator,
+            left=left_result,
+            right=right_result,
+            result=result
+        ))
 
-    def eval_mul_expr(self,tree):
-        left_type = self.eval_expr(tree.children[0])
-        operator = tree.children[1]
-        right_type = self.eval_expr(tree.children[2])
+        return result
 
-        if left_type == 'int' and right_type == 'int':
-            return 'int'
+    def Logical_expr(self, tree):
+        left_tree = tree.children[0]
+        right_tree = tree.children[1]
 
-    def eval_div_expr(self,tree):
-        left_type = self.eval_expr(tree.children[0])
-        operator = tree.children[1]
-        right_type = self.eval_expr(tree.children[2])
+        # Ewaluacja lewej strony
+        left_result = self.eval_expr(left_tree)
+        result = self.new_temp()
 
-        if left_type == 'int' and right_type == 'int':
-            return 'int'
+        # Etykiety dla krótkiego spięcia
+        false_label = self.new_label()
+        end_label = self.new_label()
+
+        # Krótkie spięcie dla AND (&&)
+        if tree.data == 'and_expr':
+            self.quadruples.append(('if_false', left_result, None, false_label))  # Jeśli lewy operand jest false, przejdź do L1
+            right_result = self.eval_expr(right_tree)                             # Ewaluacja prawego operand
+            self.quadruples.append(('assign', right_result, None, result))        # Przypisanie wyniku prawego operand do t1
+            self.quadruples.append(('goto', None, None, end_label))               # Skok na koniec wyrażenia
+            self.quadruples.append((false_label, 'assign', 'false', result))      # Jeśli lewy operand jest false, przypisz false do t1
+            self.quadruples.append((end_label, None, None, None))                 # Koniec wyrażenia
+
+        elif tree.data == 'or_expr':
+            pass
+        return result
+
+       
+
+
 
     def eval_and_expr(self, tree):
-        left_type = self.eval_expr(tree.children[0])
-        right_type = self.eval_expr(tree.children[1])
-        if left_type == 'boolean' and right_type == 'boolean':
-            return 'boolean'
+        return self.Logical_expr(tree)
+        # left_expr = tree.children[0]
+        # left_type = self.eval_expr(left_expr)
+
+        # right_expr = tree.children[1]
+        # right_type = self.eval_expr(right_expr)
+        
+        # print("Left and right: ",left_expr, right_expr)
+
+
+        # instruction = LogicalOperation(
+        #     operator='&&',
+        #     left=left_expr,
+        #     right=right_expr,
+        #     result=self.new_temp()
+        # )
 
     def eval_or_expr(self, tree):
         left_type = self.eval_expr(tree.children[0])
@@ -162,7 +214,15 @@ class LLVM_Creator(Visitor):
     def eval_not_expr(self, tree):
         expr = tree.children[0]
         expr_type = self.eval_expr(expr)
-        return 'boolean'
+
+        instruction = UnaryOperation(
+            operator='~',
+            operand=expr,
+            result=self.new_temp()
+        )
+
+        # Dodajesz do quadruples
+        self.quadruples.append(instruction)
 
     def eval_rel_expr(self, tree):
         left_type = self.eval_expr(tree.children[0])  
@@ -190,7 +250,6 @@ class LLVM_Creator(Visitor):
             self.visit(stmt) 
 
         self.block_analyzer.exit_block()
-
 
     def decl_stmt(self, tree):
         var_type = tree.children[0].data  
@@ -228,7 +287,6 @@ class LLVM_Creator(Visitor):
 
         self.instructions.append(f"store i32 {value_reg}, i32* %{var_name}")
 
-
     def variable(self, tree):
         var_name = tree.children[0].value
         var_type = self.block_analyzer.get_variable_type(var_name)
@@ -237,12 +295,10 @@ class LLVM_Creator(Visitor):
         var_name = tree.children[0].value
         var_type = self.block_analyzer.get_variable_type(var_name)
         
-
     def incr_stmt(self, tree):
         var_name = tree.children[0].value
         var_type = self.block_analyzer.get_variable_type(var_name)
-        
-        
+         
     def neg_expr(self, tree):
         expr = tree.children[0]
         expr_type = self.eval_expr(expr)
@@ -292,7 +348,6 @@ class LLVM_Creator(Visitor):
         current_function = self.current_function[0]
         expected_type = self.function_table[current_function]['return_type']
         
-
     def vret_stmt(self, tree):
         self.ret_stmt(tree)
 
@@ -320,15 +375,12 @@ class LLVM_Creator(Visitor):
         self.visit(then_block)
         self.visit(else_block)
 
-
     def while_stmt(self, tree):
         condition = tree.children[0]
         body = tree.children[1]
         condition_type = self.eval_expr(condition)
 
         self.visit(body)
-
-
 
     def get_instructions(self):
         return self.instructions

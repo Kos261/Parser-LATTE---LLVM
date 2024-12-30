@@ -1,4 +1,4 @@
-int main(){
-    boolean x = (1 == 0);
+int main() {
+    true && false;
     return 0;
 }

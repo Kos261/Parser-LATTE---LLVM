@@ -1,5 +1,6 @@
 from lark import Lark
 from src.LLVM_frontend import *
+from src.LLVM_backend import *
 from Official_tests import parse_code
 
 
@@ -14,11 +15,11 @@ def load_lat(filepath):
 
 
 if __name__ == "__main__":
-    with open('grammar.lark', 'r', encoding='utf-8') as file:
+    with open('lattests/grammar.lark', 'r', encoding='utf-8') as file:
         grammar = file.read()
     parser = Lark(grammar, parser='lalr', start='start')
 
-    filename = 'lattests/good/core021.lat'
+    filename = 'examples/test06.lat'
     code = load_lat(filename)
     print(20*"%",f" Testing {filename} ",20*"%")
 
@@ -28,7 +29,6 @@ if __name__ == "__main__":
         print(f"\n\t{error_msg}")
     else:
         try:
-            # print(tree.pretty()) 
             SIG_analyzer = SygnatureAnalyzer()   
             SIG_analyzer.visit(tree)
             SIG_analyzer.check_main()
@@ -38,6 +38,17 @@ if __name__ == "__main__":
 
             analyzer = SemanticAnalyzer(function_table)
             analyzer.visit(tree) 
-            print("\n\nEverything works fine :)")
+            print("\n\nFrontend works fine :)")
         except Exception as e:
             print(e)
+
+        
+
+
+        print(tree.pretty()) 
+        backend = LLVM_Creator(function_table)
+        backend.visit(tree)
+        print("\n\nKOD CZWÓRKOWY")
+        for q in backend.quadruples:
+            print(q)
+        
