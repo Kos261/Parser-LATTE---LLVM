@@ -1,4 +1,5 @@
 int main() {
-    true && false;
+    boolean x = true;
+    int y = 3+2;
     return 0;
 }
