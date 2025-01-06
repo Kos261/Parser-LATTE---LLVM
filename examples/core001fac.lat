@@ -1,0 +1,13 @@
+int fac(int n) {
+    int r = 1;
+    while (n > 0) {
+        r = r * n;
+        n = n - 1;
+    }
+    return r;
+}
+
+int main() {
+    printInt(fac(5)); // Powinno wypisać 120
+    return 0;
+}

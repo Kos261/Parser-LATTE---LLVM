@@ -2,7 +2,7 @@ from lark import Lark
 from src.LLVM_frontend import *
 from src.LLVM_backend import *
 from Official_tests import parse_code
-
+import sys
 
 
 
@@ -19,7 +19,8 @@ if __name__ == "__main__":
         grammar = file.read()
     parser = Lark(grammar, parser='lalr', start='start')
 
-    filename = 'examples/test06.lat'
+    filename = 'examples/core001block.lat'
+    # filename = 'lattests/good/core001.lat'
     code = load_lat(filename)
     print(20*"%",f" Testing {filename} ",20*"%")
 
@@ -41,12 +42,13 @@ if __name__ == "__main__":
             print("\n\nFrontend works fine :)")
         except Exception as e:
             print(e)
+            sys.exit(1)
 
         
 
 
         print(tree.pretty()) 
-        backend = LLVM_Creator(function_table)
+        backend = LLVM_QuadCode(function_table)
         backend.visit(tree)
         print("\n\nKOD CZWÓRKOWY")
         for q in backend.quadruples:

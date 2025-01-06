@@ -112,9 +112,12 @@ class FunctionCallAnalyzer(Visitor):
 class BlockAnalyzer:
     def __init__(self):
         self.symbol_table_stack = [{}]
+        self.temp_types = {} # Na typy rejestrów żeby pamiętać o nich
+        self.block_counter = 0
 
     def enter_block(self):
         self.symbol_table_stack.append({})
+        self.block_counter += 1
 
     def exit_block(self):
         if len(self.symbol_table_stack) > 1:
@@ -124,13 +127,26 @@ class BlockAnalyzer:
 
     def declare_variable(self, var_name, var_type, value_tree=None):
         current_scope = self.symbol_table_stack[-1]
-
+        n = len(self.symbol_table_stack)
         if var_name in current_scope:
             raise Exception(f"Variable {var_name} already declared in this scope")
-        
+        #TU DODAŁEM NUMER SCOPA ŻEBY ZMIENNA BYŁA INNA
+        # current_scope[var_name + f"{n}"] = var_type
         current_scope[var_name] = var_type
 
     def get_variable_type(self, var_name):
+        ########## MOŻLIWE ŻE DO WYWALENIA JEŚLI BĘDZIE KONFLIKT Z NODAMI ########
+        # print("VAR NAME: ",var_name)
+        
+        if var_name.startswith('"') and var_name.endswith('"'):
+            return 'string'
+        if var_name.isdigit():
+            return 'int'
+
+        # Obsługa rejestrów tymczasowych
+        if var_name in self.temp_types:
+            return self.temp_types[var_name]
+        ########## MOŻLIWE ŻE DO WYWALENIA JEŚLI BĘDZIE KONFLIKT Z NODAMI ########
         try:
             for scope in reversed(self.symbol_table_stack):
                 if var_name in scope:
@@ -138,6 +154,10 @@ class BlockAnalyzer:
         except:
             raise Exception(f"Variable '{var_name}' not declared")
         
+
+    def set_temp_type(self, temp, var_type):
+        self.temp_types[temp] = var_type
+
     def reset(self):
         self.symbol_table_stack = [{}]
     

@@ -46,14 +46,46 @@ class Assignment(Instruction):
     value: str  # Wynik wyrażenia
 
 @dataclass
+class FunctionDefinition(Instruction):
+    name: str
+    params: Optional[List[str]]
+
+
+@dataclass 
+class FunctionCall(Instruction):
+    name: str
+    params: List[str]
+    result: Optional[str]
+
+
+@dataclass
+class EndFunction(Instruction):
+    name: str
+
+
+@dataclass
+class Label(Instruction):
+    name: str
+
+
+@dataclass
+class ConditionalJump(Instruction):
+    condition: str#??
+    target: str
+
+@dataclass
+class Jump(Instruction):
+    target: str
+
+@dataclass
 class IFStatement(Instruction):
-    condition: str  # Tymczasowy rejestr z wynikiem warunku
+    condition: str
     then_body: List[Instruction]
     else_body: Optional[List[Instruction]]
 
 @dataclass
 class WhileStatement(Instruction):
-    condition: str  # Tymczasowy rejestr z wynikiem warunku
+    condition: str
     body: List[Instruction]
 
 @dataclass

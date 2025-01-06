@@ -1,6 +1,6 @@
 from lark import Lark
 from src.LLVM_frontend import *
-
+from src.LLVM_backend import *
 
 def create_test_cases(parser):
     test_cases = []
@@ -56,6 +56,52 @@ def create_test_cases(parser):
     return test_cases
 
 
+def create_test_cases_2(parser):
+    test_cases = []
+
+
+    try:
+        code = load_ins('examples/core001block.lat')
+        tree = parser.parse(code)   
+    except:
+        raise Exception(f"Unable to parse 'core001block.lat'.")
+    test_cases.append(("Testowanie bloków", tree, True))
+
+
+    try:
+        code = load_ins('examples/core001fac.lat')
+        tree = parser.parse(code)   
+    except:
+        raise Exception("Unable to parse 'core001fac.lat.")
+    test_cases.append(("Testowanie funkcji iteracyjnie", tree, True))
+
+
+    try:
+        code = load_ins('examples/core001rfac.lat')
+        tree = parser.parse(code)   
+    except:
+        raise Exception("Unable to parse 'core001rfac.lat'.")
+    test_cases.append(("Testowanie funkcji rekurencyjnych", tree, True))
+
+
+    try:
+        code = load_ins('examples/core001repStr.lat')
+        tree = parser.parse(code)   
+    except:
+        raise Exception("Unable to parse 'core001repStr.lat'.")
+    test_cases.append(("Testowanie funkcji repStr", tree, True))
+
+
+    try:
+        code = load_ins('examples/core001while.lat')
+        tree = parser.parse(code)   
+    except:
+        raise Exception("Unable to parse 'core001while.lat'.")
+    test_cases.append(("Testowanie while", tree, True))
+
+    return test_cases
+
+
 def load_ins(filepath):
     program = ""
     with open(filepath, mode='r') as f:
@@ -66,12 +112,12 @@ def load_ins(filepath):
 
 
 if __name__ == "__main__":
-    with open('grammar.lark', 'r', encoding='utf-8') as file:
+    with open('lattests/grammar.lark', 'r', encoding='utf-8') as file:
         grammar = file.read()
     parser = Lark(grammar, parser='lalr', start='start')
 
-    test_cases = create_test_cases(parser)
-    # test_cases = [test_cases[2]]  # Możesz odkomentować do testowania konkretnego przypadku
+    test_cases = create_test_cases_2(parser)
+    # test_cases = [test_cases[2]]  #Można odkomentować do testowania konkretnego przypadku
 
     print("%"*30 + "  TESTING  " + "%"*30)
     for description, test_tree, should_pass in test_cases:
@@ -84,6 +130,13 @@ if __name__ == "__main__":
             analyzer.block_analyzer.reset()
             analyzer.visit_topdown(test_tree)
 
+
+            print(test_tree.pretty()) 
+            backend = LLVM_QuadCode(function_table)
+            backend.visit(test_tree)
+            print("\n\nKOD CZWÓRKOWY")
+            for q in backend.quadruples:
+                print(q)
             if not should_pass:
                 print(f"\n\tFAILED: {description} - should fail but passed")
             else:

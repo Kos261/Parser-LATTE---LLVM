@@ -29,4 +29,7 @@ Takie coś w pliku z funkcjami pomocniczymi predefined.cpp:
 Concat(s1, s2) = s1+s2
 
 
+5. Poprawić get_variable_type
+
+
 

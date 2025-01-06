@@ -1,0 +1,14 @@
+string repStr(string s, int n) {
+    string r = "";
+    int i = 0;
+    while (i < n) {
+        r = r + s;
+        i++;
+    }
+    return r;
+}
+
+int main() {
+    printString(repStr("=", 5)); // Powinno wypisać "====="
+    return 0;
+}

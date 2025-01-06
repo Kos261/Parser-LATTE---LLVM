@@ -1,0 +1,113 @@
+%import common.WS
+%import common.CNAME -> IDENT
+%import common.INT -> INTEGER
+%import common.ESCAPED_STRING -> STRING
+%ignore WS
+
+// Komentarze
+COMMENT: /#.*|\/\/.*|\/\*(.|\n)*?\*\//
+%ignore COMMENT
+
+start: program
+
+program: topdef*
+
+topdef: type IDENT "(" [arg_list] ")" block
+
+arg_list: arg ("," arg)*
+
+arg: type IDENT
+
+block: "{" stmt* "}"
+
+stmt: empty_stmt
+    | block
+    | decl_stmt
+    | assign_stmt
+    | incr_stmt
+    | decr_stmt
+    | ret_stmt
+    | vret_stmt
+    | if_stmt
+    | if_else_stmt
+    | while_stmt
+    | expr_stmt
+
+empty_stmt: ";"
+
+decl_stmt: type item_list ";"
+
+item_list: item ("," item)*
+
+item: IDENT ("=" expr)?
+
+assign_stmt: IDENT "=" expr ";"
+
+incr_stmt: IDENT "++" ";"
+
+decr_stmt: IDENT "--" ";"
+
+ret_stmt: "return" expr ";"
+
+vret_stmt: "return" ";"
+
+if_stmt: "if" "(" expr ")" stmt
+
+if_else_stmt: "if" "(" expr ")" stmt "else" stmt
+
+while_stmt: "while" "(" expr ")" stmt
+
+expr_stmt: expr ";"
+
+type: "int"       -> int_type
+    | "string"    -> string_type
+    | "boolean"   -> boolean_type
+    | "void"      -> void_type
+    | func_type
+
+func_type: type "(" [type_list] ")"
+
+type_list: type ("," type)*
+
+?expr: expr "||" expr1   -> or_expr
+     | expr1
+
+?expr1: expr1 "&&" expr2   -> and_expr
+      | expr2
+
+?expr2: expr2 relop expr3  -> rel_expr
+      | expr3
+
+?expr3: expr3 addop expr4  -> add_expr
+      | expr4
+
+?expr4: expr4 mulop expr5  -> mul_expr
+      | expr5
+
+?expr5: "-" expr5          -> neg_expr
+      | "!" expr5          -> not_expr
+      | expr6
+
+?expr6: IDENT                   -> var_expr
+      | INTEGER                 -> int_expr
+      | "true"                  -> true_expr
+      | "false"                 -> false_expr
+      | IDENT "(" [expr_list] ")" -> func_call_expr
+      | STRING                  -> string_expr
+      | "(" expr ")"            -> paren_expr
+
+expr_list: expr ("," expr)*
+
+addop: "+" -> plus_op
+     | "-" -> minus_op
+
+mulop: "*" -> times_op
+     | "/" -> div_op
+     | "%" -> mod_op
+
+relop: "<"  -> lt_op
+     | "<=" -> le_op
+     | ">"  -> gt_op
+     | ">=" -> ge_op
+     | "==" -> eq_op
+     | "!=" -> ne_op

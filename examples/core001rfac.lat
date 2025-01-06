@@ -1,0 +1,11 @@
+int rfac(int n) {
+    if (n == 0)
+        return 1;
+    else
+        return n * rfac(n - 1);
+}
+
+int main() {
+    printInt(rfac(5)); // Powinno wypisać 120
+    return 0;
+}
