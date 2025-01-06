@@ -19,8 +19,8 @@ if __name__ == "__main__":
         grammar = file.read()
     parser = Lark(grammar, parser='lalr', start='start')
 
-    filename = 'examples/core001block.lat'
-    # filename = 'lattests/good/core001.lat'
+    # filename = 'examples/test06.lat'
+    filename = 'lattests/good/core001.lat'
     code = load_lat(filename)
     print(20*"%",f" Testing {filename} ",20*"%")
 

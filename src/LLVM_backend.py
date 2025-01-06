@@ -1,9 +1,57 @@
 from lark.visitors import Visitor
 from lark import Tree, Token
 from src.IRdataclasses import *
-from src.LLVM_frontend import BlockAnalyzer, FunctionCallAnalyzer
+from src.LLVM_frontend import FunctionCallAnalyzer
 
 
+class ScopeHandler:
+    def __init__(self):
+        self.symbol_table_stack = [{}]
+        self.temp_types = {} # Na typy rejestrów żeby pamiętać o nich
+        self.block_counter = 0
+
+    def enter_block(self):
+        self.symbol_table_stack.append({})
+        self.block_counter += 1
+
+    def exit_block(self):
+        if len(self.symbol_table_stack) > 1:
+            self.symbol_table_stack.pop()
+        else:
+            raise Exception("Attempted to exit global scope")
+
+    def declare_variable(self, var_name, var_type, value_tree=None):
+        current_scope = self.symbol_table_stack[-1]
+
+        if var_name in current_scope:
+            raise Exception(f"Variable {var_name} already declared in this scope")
+        
+        unique_name = f"{var_name}_block{self.block_counter}"
+        current_scope[unique_name] = var_type
+        return unique_name
+
+    def get_variable_type(self, var_name):    
+        if var_name.startswith('"') and var_name.endswith('"'):
+            return 'string'
+        if var_name.isdigit():
+            return 'int'
+
+        # Obsługa rejestrów tymczasowych
+        if var_name in self.temp_types:
+            return self.temp_types[var_name]
+        try:
+            for scope in reversed(self.symbol_table_stack):
+                if var_name in scope:
+                    return scope[var_name]
+        except:
+            raise Exception(f"Variable '{var_name}' not declared")
+        
+
+    def set_temp_type(self, temp, var_type):
+        self.temp_types[temp] = var_type
+
+    def reset(self):
+        self.symbol_table_stack = [{}]
 
 
 class LLVM_QuadCode(Visitor):
@@ -19,8 +67,8 @@ class LLVM_QuadCode(Visitor):
         self.last_register = None
 
         self.function_table = function_table
-        self.block_analyzer = BlockAnalyzer()
-        self.function_call_analyzer = FunctionCallAnalyzer(self.function_table, self.block_analyzer)
+        self.scope_handler = ScopeHandler()
+        self.function_call_analyzer = FunctionCallAnalyzer(self.function_table, self.scope_handler)
         self.current_function = (None, False)
 
     def new_temp(self) -> str:
@@ -41,11 +89,8 @@ class LLVM_QuadCode(Visitor):
             'decr_stmt': self.decr_stmt,
             'incr_stmt': self.incr_stmt,
             'while_stmt': self.while_stmt,
-            # 'variable':self.variable,
             'decl_stmt':self.decl_stmt,
-            'assign_stmt':self.assign_stmt,
             'block':self.block,
-            # Ogólny handler dla wyrażeń
             'int_expr': self.eval_expr,
             'boolean_expr': self.eval_expr,
             'true_expr': self.eval_expr,
@@ -69,11 +114,9 @@ class LLVM_QuadCode(Visitor):
         # Węzły, które wymagają odwiedzenia poddrzew
         self.passthrough_nodes = {'start', 'program', 'stmt', 'item', 'item_list', 'stmt_list', 'expr_list', 'expr_stmt'}
 
-        # Obsługa węzłów z dedykowaną logiką
         if tree.data in handlers:
             return handlers[tree.data](tree)
 
-        # Jeśli węzeł wymaga odwiedzenia poddrzew, przejdź przez dzieci
         elif tree.data in self.passthrough_nodes:
             for child in tree.children:
                 if isinstance(child, Tree):
@@ -113,7 +156,7 @@ class LLVM_QuadCode(Visitor):
         elif tree.data in self.passthrough_nodes:
             for child in tree.children:
                 if isinstance(child, Tree):
-                    return self.eval_expr(child)  # Upewnij się, że zwraca wartość
+                    return self.eval_expr(child)  
 
         else:
             raise Exception(f"Unsupported expression type: {tree.data}")
@@ -152,14 +195,10 @@ class LLVM_QuadCode(Visitor):
 
         left_result = self.eval_expr(left_tree)
         right_result = self.eval_expr(right_tree)
-        
-        # print("LEFT RESULT: ", left_result)
-        # print("RIGHT REsULT: ", right_result)
 
-        left_type = self.block_analyzer.get_variable_type(left_result)
-        # print("LEFT TYPE: ", left_type)
-        right_type = self.block_analyzer.get_variable_type(right_result)
-        # print("RIGHT TYPE:", right_type)
+        left_type = self.scope_handler.get_variable_type(left_result)
+        right_type = self.scope_handler.get_variable_type(right_result)
+      
 
         result = self.new_temp()
 
@@ -169,7 +208,7 @@ class LLVM_QuadCode(Visitor):
                 params=[left_result, right_result],
                 result=result
             ))
-            self.block_analyzer.set_temp_type(result, 'string')
+            self.scope_handler.set_temp_type(result, 'string')
 
         else:
             self.quadruples.append(BinaryOperation(
@@ -178,7 +217,7 @@ class LLVM_QuadCode(Visitor):
                 right=right_result,
                 result=result
             ))
-            self.block_analyzer.set_temp_type(result, 'int')
+            self.scope_handler.set_temp_type(result, 'int')
 
         return result
 
@@ -186,17 +225,15 @@ class LLVM_QuadCode(Visitor):
         left_tree = tree.children[0]
         right_tree = tree.children[1]
 
-        # Ewaluacja lewej strony
         left_result = self.eval_expr(left_tree)
         result = self.new_temp()
 
-        # Etykiety dla krótkiego spięcia
         false_label = self.new_label()
         end_label = self.new_label()
 
-        # Krótkie spięcie dla AND (&&)
+        # Krótkie spięcie dla &&
         if tree.data == 'and_expr':
-            # Jeśli lewy operand jest false, przejdź do L1
+            # Jeśli lewy operand jest false -> L1
             self.quadruples.append(
                 LogicalOperation(
                     left=left_result,
@@ -214,7 +251,7 @@ class LLVM_QuadCode(Visitor):
                     result=end_label
                 )
             )
-            # Jeśli lewy operand jest false, przypisz false do t1
+            # Jeśli lewy operand jest false -> t1=false
             self.quadruples.append(
                 LogicalOperation(
                     left=None,
@@ -239,10 +276,10 @@ class LLVM_QuadCode(Visitor):
             )
 
         elif tree.data == 'or_expr':
-            # Krótkie spięcie dla OR (||)
+            # Krótkie spięcie dla ||
             true_label = self.new_label()
 
-            # Jeśli lewy operand jest true, przejdź do L1
+            # Jeśli lewy operand jest true -> L1
             self.quadruples.append(
                 LogicalOperation(
                     left=left_result,
@@ -268,7 +305,7 @@ class LLVM_QuadCode(Visitor):
                     result=end_label
                 )
             )
-            # Jeśli lewy operand jest true, przypisz true do t1
+            # Jeśli lewy operand jest true -> t1=true
             self.quadruples.append(
                 Assignment(
                     variable=result,
@@ -316,10 +353,9 @@ class LLVM_QuadCode(Visitor):
             'string_type': '""'
         }
 
-        # Nwm czemu trzeba rozpakować prawą strone wyrażenia np. int x = 1 + 3
         for item in items:
             var_name = item.children[0].value
-            self.block_analyzer.declare_variable(var_name, var_type.replace("_type", ""))
+            self.scope_handler.declare_variable(var_name, var_type.replace("_type", ""))
 
             if len(item.children) > 1:
                 expr = item.children[1]
@@ -327,8 +363,10 @@ class LLVM_QuadCode(Visitor):
             else:
                 value = default_values[var_type]
 
+            unique_var_name = self.scope_handler.declare_variable(var_name, var_type)
+
             self.quadruples.append(Assignment(
-                variable=var_name,
+                variable=unique_var_name,
                 value=value
             ))
      
@@ -340,17 +378,6 @@ class LLVM_QuadCode(Visitor):
        
     def eval_not_expr(self, tree):
         return self.Unary_expr(tree)
-        # expr = tree.children[0]
-        # expr_type = self.eval_expr(expr)
-
-        # instruction = UnaryOperation(
-        #     operator='~',
-        #     operand=expr,
-        #     result=self.new_temp()
-        # )
-
-        # # Dodajesz do quadruples
-        # self.quadruples.append(instruction)
 
     def eval_rel_expr(self, tree):
         left = self.eval_expr(tree.children[0])  
@@ -373,8 +400,8 @@ class LLVM_QuadCode(Visitor):
     def func_call_expr(self, tree):
         result = self.new_temp()
 
-        func_name = tree.children[0].value  # Nazwa funkcji
-        args = [self.eval_expr(arg) for arg in tree.children[1].children]  # Argumenty
+        func_name = tree.children[0].value
+        args = [self.eval_expr(arg) for arg in tree.children[1].children]
 
         if func_name in {'printInt', 'printString', 'error'}:
             self.quadruples.append(FunctionCall(
@@ -389,45 +416,33 @@ class LLVM_QuadCode(Visitor):
                 params=args,
                 result=result
             ))
+
+        ret_type = self.function_table[func_name]['return_type']
+        self.scope_handler.set_temp_type(result, ret_type)
         return result
 
     def block(self, tree):
-        self.block_analyzer.enter_block()
+        self.scope_handler.enter_block()
         self.quadruples.append(Label(name='block_start'))
         for stmt in tree.children:  
             self.visit(stmt) 
         self.quadruples.append(Label(name='block_end'))
-        self.block_analyzer.exit_block()
+        self.scope_handler.exit_block()
 
     def decl_stmt(self, tree):       
         return self.Declaration_expr(tree)
 
-        #     if expr_type != var_type.replace("_type", ""):
-
-    def assign_stmt(self, tree):
-        var_name = tree.children[0].value
-        var_type = self.block_analyzer.get_variable_type(var_name)
-        expr = tree.children[1]
-        expr_type = self.eval_expr(expr)
-        value_reg = None #Na razie nic
-
-        if var_name not in self.variable_index:
-            self.instructions.append(f"%{var_name} = alloca i32")
-            self.variable_index[var_name] = True
-
-        self.instructions.append(f"store i32 {value_reg}, i32* %{var_name}")
-
     def variable(self, tree):
         var_name = tree.children[0].value
-        var_type = self.block_analyzer.get_variable_type(var_name)
+        var_type = self.scope_handler.get_variable_type(var_name)
      
     def decr_stmt(self, tree):
         var_name = tree.children[0].value
-        var_type = self.block_analyzer.get_variable_type(var_name)
+        var_type = self.scope_handler.get_variable_type(var_name)
         
     def incr_stmt(self, tree):
         var_name = tree.children[0].value
-        var_type = self.block_analyzer.get_variable_type(var_name)
+        var_type = self.scope_handler.get_variable_type(var_name)
          
     def neg_expr(self, tree):
         expr = tree.children[0]
@@ -441,7 +456,7 @@ class LLVM_QuadCode(Visitor):
         expr = tree.children[2]
         expr_type = self.eval_expr(expr)
 
-        self.block_analyzer.declare_variable(var_name, var_type)
+        self.scope_handler.declare_variable(var_name, var_type)
 
     def topdef(self, tree):
         func_name = tree.children[1].value
@@ -463,15 +478,15 @@ class LLVM_QuadCode(Visitor):
         ))
 
 
-        self.block_analyzer.enter_block()
+        self.scope_handler.enter_block()
 
         for param_type, param_name in params:
-            self.block_analyzer.declare_variable(param_name, param_type)
+            self.scope_handler.declare_variable(param_name, param_type)
 
         self.visit(block)
         self.quadruples.append(EndFunction(name=func_name))
 
-        self.block_analyzer.exit_block()
+        self.scope_handler.exit_block()
         self.current_function = (None, False)
 
     def ret_stmt(self, tree):
@@ -538,16 +553,12 @@ class LLVM_QuadCode(Visitor):
 
         self.quadruples.append(Label(name=end_label))
 
-
-
     def while_stmt(self, tree):
         start_label = self.new_label()
         end_label = self.new_label()
 
-        # Dodaj etykietę początku pętli
         self.quadruples.append(Label(name=start_label))
 
-        # Warunek
         condition_result = self.eval_expr(tree.children[0])
         self.quadruples.append(ConditionalJump(
             condition=condition_result,
@@ -560,12 +571,9 @@ class LLVM_QuadCode(Visitor):
         # Skok z powrotem do początku pętli
         self.quadruples.append(Jump(target=start_label))
 
-        # Dodaj etykietę końca pętli
+        # Koniec pętli
         self.quadruples.append(Label(name=end_label))
 
-
-
-
     def get_instructions(self):
-        return self.instructions
+        return self.quadruples
 

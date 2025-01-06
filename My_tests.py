@@ -123,12 +123,12 @@ if __name__ == "__main__":
     for description, test_tree, should_pass in test_cases:
         try:
             SIG_analyzer = SygnatureAnalyzer()
-            SIG_analyzer.visit_topdown(test_tree)
+            SIG_analyzer.visit(test_tree)
             function_table = SIG_analyzer.function_table
 
             analyzer = SemanticAnalyzer(function_table)
             analyzer.block_analyzer.reset()
-            analyzer.visit_topdown(test_tree)
+            analyzer.visit(test_tree)
 
 
             print(test_tree.pretty()) 
@@ -137,6 +137,8 @@ if __name__ == "__main__":
             print("\n\nKOD CZWÓRKOWY")
             for q in backend.quadruples:
                 print(q)
+
+                
             if not should_pass:
                 print(f"\n\tFAILED: {description} - should fail but passed")
             else:

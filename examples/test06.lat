@@ -1,6 +1,5 @@
 int main() {
-    string s = "Number: ";
-    int x = 42;
-    string result = s + x; // Niedozwolone w Latte
+    {}
     return 0;
 }
+
